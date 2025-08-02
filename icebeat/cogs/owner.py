@@ -37,7 +37,7 @@ class Owner(commands.Cog):
             if not whitelist.guild_ids:
                 embed = Embed(
                     title="There aren't whitelisted servers",
-                    description="Use !whitelist <server name or id> to add a server",
+                    description="Use !whitelist <server name or ID> to add a server",
                     color=Color.green(),
                 )
                 return embed, 1
@@ -52,7 +52,8 @@ class Owner(commands.Cog):
                     await self._bot.store.remove_from_whitelist(guild_id)
 
                     __log__.info(
-                        f"Removed server {guild_id} from whitelist as bot is no longer a member"
+                        "Removed server %s from whitelist as bot is no longer a member",
+                        guild_id,
                     )
 
                     total_pages = ContextPagination.compute_total_pages(
@@ -115,7 +116,7 @@ class Owner(commands.Cog):
     ) -> None:
         if isinstance(error, commands.BadArgument):
             embed = Embed(
-                title="Invalid server ID or bot is not a member", color=Color.yellow()
+                title="Invalid server ID or bot isn't a member", color=Color.yellow()
             )
         elif isinstance(error, commands.CommandOnCooldown):
             embed = Embed(
