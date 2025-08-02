@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS guilds (
+  id INTEGER PRIMARY KEY,
+  text_channel_id INTEGER DEFAULT NULL,
+  filter INTEGER NOT NULL DEFAULT 0,
+  volume REAL NOT NULL DEFAULT 1.0,
+  auto_leave INTEGER NOT NULL DEFAULT 1,
+  FOREIGN KEY (id) REFERENCES whitelist (guild_id)
+);

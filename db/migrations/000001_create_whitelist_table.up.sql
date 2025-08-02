@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS whitelist (
+  guild_id INTEGER PRIMARY KEY
+);
