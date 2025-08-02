@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from discord import Game, Guild, Intents, Object, Status
+from discord import Game, Guild, Intents, MemberCacheFlags, Object, Status
 import discord
 from discord.ext import commands
 import lavalink
@@ -16,7 +16,9 @@ _PREFIX = "!"
 _DESCRIPTION = "IceBeat, a sort of jukebox"
 _STATUS = Status.online
 _ACTIVITY = Game(name="music")
-_INTENTS = Intents(guilds=True, message_content=True, dm_messages=True)
+_INTENTS = Intents(
+    guilds=True, message_content=True, dm_messages=True, voice_states=True
+)
 
 __log__ = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ class IceBeat(commands.Bot):
             help_command=None,
             description=_DESCRIPTION,
             intents=_INTENTS,
+            membed_cache_flags=MemberCacheFlags.from_intents(_INTENTS),
             status=_STATUS,
             activity=_ACTIVITY,
         )
