@@ -74,28 +74,6 @@ class IceBeat(commands.Bot):
     async def on_resumed(self) -> None:
         __log__.info("Session was resumed")
 
-    async def on_guild_join(self, guild: Guild) -> None:
-        whiltelist = await self.store.get_whitelist()
-        if guild.id in whiltelist.guild_ids:
-            return
-
-        system_channel = guild.system_channel
-        if not system_channel:
-            return
-
-        embed = Embed(
-            title=":confused: I apologyze but this server isn't whitelisted...",
-            description="I won't leave, though commands wont work",
-            color=Color.yellow(),
-        )
-        embed.set_footer(
-            text="Note: only the bot owner is allowed to whitelist servers"
-        )
-        try:
-            await system_channel.send(embed=embed)
-        except discord.DiscordException:
-            pass
-
     async def on_guild_remove(self, guild: Guild) -> None:
         await self.store.remove_from_whitelist(guild.id)
 
