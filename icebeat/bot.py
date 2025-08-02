@@ -1,7 +1,15 @@
 import logging
 from typing import Any
 
-from discord import Game, Guild, Intents, MemberCacheFlags, Object, Status
+from discord import (
+    AllowedMentions,
+    Game,
+    Guild,
+    Intents,
+    MemberCacheFlags,
+    Object,
+    Status,
+)
 import discord
 from discord.ext import commands
 import lavalink
@@ -38,6 +46,7 @@ class IceBeat(commands.Bot):
             membed_cache_flags=MemberCacheFlags.from_intents(_INTENTS),
             status=_STATUS,
             activity=_ACTIVITY,
+            allowed_metions=AllowedMentions.none(),
         )
 
         self.store = store
