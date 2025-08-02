@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from discord import Color, Embed, Game, Guild, Intents, Object, Status
+from discord import Game, Guild, Intents, Object, Status
 import discord
 from discord.ext import commands
 import lavalink
