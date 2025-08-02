@@ -43,10 +43,10 @@ class IceBeat(commands.Bot):
             help_command=None,
             description=_DESCRIPTION,
             intents=_INTENTS,
-            membed_cache_flags=MemberCacheFlags.from_intents(_INTENTS),
+            member_cache_flags=MemberCacheFlags.from_intents(_INTENTS),
             status=_STATUS,
             activity=_ACTIVITY,
-            allowed_metions=AllowedMentions.none(),
+            allowed_mentions=AllowedMentions.none(),
         )
 
         self.store = store
