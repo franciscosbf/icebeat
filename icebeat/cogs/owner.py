@@ -86,17 +86,6 @@ class Owner(commands.Cog):
                 embed.description = f"Server **{guild.name}** (ID: **{guild.id}**) is already whitelisted"
             await ctx.send(embed=embed)
 
-            system_channel = guild.system_channel
-            if system_channel:
-                embed = Embed(
-                    title="Lucky bastard(s), this server now belongs to the whitelist",
-                    color=Color.green(),
-                )
-                try:
-                    await system_channel.send(embed=embed)
-                except discord.DiscordException:
-                    pass
-
             return
 
         pagination = ContextPagination(
@@ -118,17 +107,6 @@ class Owner(commands.Cog):
                 f"Server **{guild.name}** (ID: **{guild.id}**) isn't whitelisted"
             )
         await ctx.send(embed=embed)
-
-        system_channel = guild.system_channel
-        if system_channel:
-            embed = Embed(
-                title="Unfortunately, this server was removed from the whitelist",
-                color=Color.yellow(),
-            )
-            try:
-                await system_channel.send(embed=embed)
-            except discord.DiscordException:
-                pass
 
     @whitelist.error
     @blacklist.error
