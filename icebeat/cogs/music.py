@@ -35,7 +35,7 @@ def _default_permissions() -> Callable[[app_commands.checks.T], app_commands.che
 
 def _cooldown() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
     return app_commands.checks.cooldown(
-        rate=1, per=2.0, key=lambda interaction: interaction.guild_id
+        rate=2, per=2.0, key=lambda interaction: interaction.guild_id
     )
 
 
