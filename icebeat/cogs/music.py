@@ -244,7 +244,7 @@ class Music(commands.Cog):
     @_is_whitelisted()
     @_is_guild_owner()
     @_cooldown()
-    async def autoleave(self, interaction: Interaction) -> None:
+    async def leave(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
