@@ -1,5 +1,5 @@
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from discord import Color, Embed, Guild
 import discord
@@ -13,12 +13,14 @@ if TYPE_CHECKING:
 
 __all__ = ["Owner"]
 
-_COOLDOWN_RATE = 2
-_COOLDOWN_PER = 4.0
+__log__ = logging.getLogger(__name__)
+
 _WHITELIST_VIEW_TIMEOUT = 20.0
 _WHITELIST_VIEW_PAGE_SIZE = 6
 
-__log__ = logging.getLogger(__name__)
+
+def _cooldown() -> Callable[[commands.core.T], commands.core.T]:
+    return commands.cooldown(rate=2, per=4.0, type=commands.BucketType.guild)
 
 
 class Owner(commands.Cog):
@@ -30,7 +32,7 @@ class Owner(commands.Cog):
     @commands.command()
     @commands.dm_only()
     @commands.is_owner()
-    @commands.cooldown(_COOLDOWN_RATE, _COOLDOWN_PER)
+    @_cooldown()
     async def whitelist(self, ctx: commands.Context, guild: Guild = None) -> None:  # pyright: ignore[reportArgumentType]
         async def fetch_whitelist_page(current_page: int) -> tuple[Embed, int]:
             whitelist = await self._bot.store.get_whitelist()
@@ -99,7 +101,7 @@ class Owner(commands.Cog):
     @commands.command()
     @commands.dm_only()
     @commands.is_owner()
-    @commands.cooldown(_COOLDOWN_RATE, _COOLDOWN_PER)
+    @_cooldown()
     async def blacklist(self, ctx: commands.Context, guild: Guild) -> None:  # pyright: ignore[reportArgumentType]
         blacklisted = await self._bot.store.remove_from_whitelist(guild.id)
         embed = Embed(color=Color.green())
@@ -116,7 +118,7 @@ class Owner(commands.Cog):
     @commands.command()
     @commands.dm_only()
     @commands.is_owner()
-    @commands.cooldown(_COOLDOWN_RATE, _COOLDOWN_PER)
+    @_cooldown()
     async def sync(self, ctx: commands.Context, guild: Guild) -> None:
         whitelist = await self._bot.store.get_whitelist()
         if guild.id not in whitelist.guild_ids:
@@ -159,5 +161,4 @@ class Owner(commands.Cog):
                 title="Something unexpected went wrong...",
                 color=Color.red(),
             )
-
         await ctx.send(embed=embed)

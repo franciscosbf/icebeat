@@ -1,12 +1,11 @@
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from discord import (
     Client,
     Color,
     Embed,
     Interaction,
-    Permissions,
     VoiceChannel,
     VoiceProtocol,
     app_commands,
@@ -25,17 +24,22 @@ if TYPE_CHECKING:
 
 __all__ = ["Music"]
 
-_PERMISSIONS = Permissions(connect=True, speak=True, send_messages=True)
-
-
 __log__ = logging.getLogger(__name__)
 
 
+def _default_permissions() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
+    return app_commands.default_permissions(
+        connect=True, speak=True, send_messages=True
+    )
+
+
+def _cooldown() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
+    return app_commands.checks.cooldown(
+        rate=1, per=2.0, key=lambda interaction: interaction.guild_id
+    )
+
+
 class _GuildNotWhitelisted(app_commands.CheckFailure):
-    pass
-
-
-class _NotGuildOwner(app_commands.CheckFailure):
     pass
 
 
@@ -49,6 +53,10 @@ def _is_whitelisted():
         raise _GuildNotWhitelisted()
 
     return app_commands.check(predicate)
+
+
+class _NotGuildOwner(app_commands.CheckFailure):
+    pass
 
 
 def _is_guild_owner():
@@ -135,48 +143,54 @@ class Music(commands.Cog):
     @app_commands.command(description="player whatever you want")
     @app_commands.describe(search="url or as if you were searching on YouTube")
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
+    @_cooldown()
     async def play(self, interaction: Interaction, search: str) -> None:
         _, _ = interaction, search
         pass  # TODO: implement
 
     @app_commands.command(description="stops the player")
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
+    @_cooldown()
     async def pause(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
     @app_commands.command(description="resumes the player")
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
+    @_cooldown()
     async def resume(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
     @app_commands.command(description="skips what's currently playing")
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
+    @_cooldown()
     async def skip(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
     @app_commands.command(description="displays queue")
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
+    @_cooldown()
     async def queue(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
     @app_commands.command(description="enables or disables shuffle mode")
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
+    @_cooldown()
     async def shuffle(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
@@ -184,9 +198,10 @@ class Music(commands.Cog):
     @app_commands.command(description="enables or disables shuffle mode")
     @app_commands.describe(level="volume level (the higher, the worst)")
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
     @_is_guild_owner()
+    @_cooldown()
     async def volume(
         self, interaction: Interaction, level: app_commands.Range[int, 0, 1000]
     ) -> None:
@@ -196,9 +211,10 @@ class Music(commands.Cog):
     @app_commands.command(description="sets player filter")
     @app_commands.describe(name="filter name")
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
     @_is_guild_owner()
+    @_cooldown()
     async def filter(self, interaction: Interaction, name: Filter) -> None:
         _, _ = interaction, name
         pass  # TODO: implement
@@ -207,9 +223,10 @@ class Music(commands.Cog):
         description="bot won't leave the voice channel if queue gets empty"
     )
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
     @_is_guild_owner()
+    @_cooldown()
     async def stay(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
@@ -218,9 +235,10 @@ class Music(commands.Cog):
         description="bot will remain in the voice channel if queue gets empty"
     )
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
     @_is_guild_owner()
+    @_cooldown()
     async def autoleave(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
@@ -229,9 +247,10 @@ class Music(commands.Cog):
         description="if a normal search is provided to play, the bot will select the first result"
     )
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
     @_is_guild_owner()
+    @_cooldown()
     async def autosearch(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
@@ -240,9 +259,10 @@ class Music(commands.Cog):
         description="if a normal search is provided to play, you will be able to select between multiple results"
     )
     @app_commands.guild_only()
-    @app_commands.default_permissions(_PERMISSIONS)
+    @_default_permissions()
     @_is_whitelisted()
     @_is_guild_owner()
+    @_cooldown()
     async def selectsearch(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
@@ -260,6 +280,12 @@ class Music(commands.Cog):
                 title="Only the server owner is allowed to execute this command",
                 color=Color.yellow(),
             )
+        elif isinstance(error, app_commands.CommandOnCooldown):
+            embed = Embed(
+                title="Take it easy, do not spam commands",
+                color=Color.yellow(),
+            )
+            embed.set_footer(text="You still have tomorrow")
         else:
             __log__.warning(
                 f"Error on {interaction.command.name} command",  # pyright: ignore[reportOptionalMemberAccess]
@@ -271,4 +297,4 @@ class Music(commands.Cog):
                 color=Color.red(),
             )
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
