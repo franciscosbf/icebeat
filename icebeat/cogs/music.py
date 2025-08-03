@@ -1,7 +1,22 @@
 import logging
 from typing import TYPE_CHECKING
-from discord import Color, Embed, Interaction, Permissions, app_commands
+
+from discord import (
+    Client,
+    Color,
+    Embed,
+    Interaction,
+    Permissions,
+    VoiceChannel,
+    VoiceProtocol,
+    app_commands,
+)
+from discord.types.voice import (
+    GuildVoiceState as GuildVoiceStatePayload,
+    VoiceServerUpdate as VoiceServerUpdatePayload,
+)
 from discord.ext import commands
+import lavalink
 
 from ..model import Filter
 
@@ -43,6 +58,72 @@ def _is_guild_owner():
         raise _NotGuildOwner()
 
     return app_commands.check(predicate)
+
+
+class _LavalinkVoiceClient(VoiceProtocol):
+    __slots__ = ("_lavalink", "_destroyed", "_guild")
+
+    def __init__(self, client: Client, channel: VoiceChannel) -> None:
+        super().__init__(client, channel)
+
+        self._lavalink: lavalink.Client = self.client.lavalink  # pyright: ignore[reportAttributeAccessIssue]
+        self._destroyed = False
+        self._guild = self.channel.guild
+
+    async def _destroy(self) -> None:
+        self.cleanup()
+
+        if self._destroyed:
+            return
+        self._destroyed = True
+
+        try:
+            await self._lavalink.player_manager.destroy(self._guild.id)
+        except lavalink.errors.ClientError:
+            pass
+
+    async def on_voice_state_update(self, data: GuildVoiceStatePayload) -> None:
+        raw_channel_id = data["channel_id"]
+        if not raw_channel_id:
+            await self._destroy()
+
+            return
+
+        channel_id = int(raw_channel_id)
+        self.channel: VoiceChannel = self.client.get_channel(channel_id)  # pyright: ignore[reportAttributeAccessIssue, reportIncompatibleVariableOverride]
+
+        payload = {"t": "VOICE_STATE_UPDATE", "d": data}
+        await self._lavalink.voice_update_handler(payload)
+
+    async def on_voice_server_update(self, data: VoiceServerUpdatePayload) -> None:
+        payload = {"t": "VOICE_SERVER_UPDATE", "d": data}
+        await self._lavalink.voice_update_handler(payload)
+
+    async def connect(
+        self,
+        *,
+        timeout: float,
+        reconnect: bool,
+        self_deaf: bool = False,
+        self_mute: bool = False,
+    ) -> None:
+        _, _ = timeout, reconnect
+
+        self._lavalink.player_manager.create(guild_id=self._guild.id)
+        await self._guild.change_voice_state(
+            channel=self.channel, self_mute=self_mute, self_deaf=self_deaf
+        )
+
+    async def disconnect(self, *, force: bool) -> None:
+        player = self._lavalink.player_manager.get(self._guild.id)
+
+        if not force and not player.is_connected:  # pyright: ignore[reportOptionalMemberAccess]
+            return
+
+        await self._guild.change_voice_state(channel=None)
+
+        player.channel_id = None  #  pyright: ignore[reportOptionalMemberAccess]
+        await self._destroy()
 
 
 class Music(commands.Cog):
