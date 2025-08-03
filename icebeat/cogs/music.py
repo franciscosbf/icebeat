@@ -6,6 +6,7 @@ from discord import (
     Color,
     Embed,
     Interaction,
+    Permissions,
     VoiceChannel,
     VoiceProtocol,
     app_commands,
@@ -27,10 +28,11 @@ __all__ = ["Music"]
 __log__ = logging.getLogger(__name__)
 
 
+_DEFAULT_PERMISSIONS = Permissions(connect=True, speak=True, send_messages=True)
+
+
 def _default_permissions() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
-    return app_commands.default_permissions(
-        connect=True, speak=True, send_messages=True
-    )
+    return app_commands.default_permissions(_DEFAULT_PERMISSIONS)
 
 
 def _cooldown() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
@@ -141,7 +143,7 @@ class Music(commands.Cog):
         self._bot = bot
 
     @app_commands.command(description="player whatever you want")
-    @app_commands.describe(search="url or as if you were searching on YouTube")
+    @app_commands.describe(search="link or normal search as if you were on YouTube")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
@@ -219,11 +221,16 @@ class Music(commands.Cog):
         _, _ = interaction, name
         pass  # TODO: implement
 
-    @app_commands.command(
-        description="bot won't leave the voice channel if queue gets empty"
+    _presence_group = app_commands.Group(
+        name="presence",
+        description="decide bot behaviour when queue is empty",
+        guild_only=True,
+        default_permissions=_DEFAULT_PERMISSIONS,
     )
-    @app_commands.guild_only()
-    @_default_permissions()
+
+    @_presence_group.command(
+        description="bot won't leave the voice channel if the queue is empty"
+    )
     @_is_whitelisted()
     @_is_guild_owner()
     @_cooldown()
@@ -231,11 +238,9 @@ class Music(commands.Cog):
         _ = interaction
         pass  # TODO: implement
 
-    @app_commands.command(
-        description="bot will remain in the voice channel if queue gets empty"
+    @_presence_group.command(
+        description="bot will remain in the voice channel if the queue is empty"
     )
-    @app_commands.guild_only()
-    @_default_permissions()
     @_is_whitelisted()
     @_is_guild_owner()
     @_cooldown()
@@ -243,27 +248,30 @@ class Music(commands.Cog):
         _ = interaction
         pass  # TODO: implement
 
-    @app_commands.command(
-        description="if a normal search is provided to play, the bot will select the first result"
+    _search_group = app_commands.Group(
+        name="search",
+        description="select search mode",
+        guild_only=True,
+        default_permissions=_DEFAULT_PERMISSIONS,
     )
-    @app_commands.guild_only()
-    @_default_permissions()
+
+    @_search_group.command(
+        description="if a normal search is provided, the bot will select the first result"
+    )
     @_is_whitelisted()
     @_is_guild_owner()
     @_cooldown()
-    async def autosearch(self, interaction: Interaction) -> None:
+    async def auto(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
-    @app_commands.command(
-        description="if a normal search is provided to play, you will be able to select between multiple results"
+    @_search_group.command(
+        description="if a normal search is provided, you will be able to select between multiple results"
     )
-    @app_commands.guild_only()
-    @_default_permissions()
     @_is_whitelisted()
     @_is_guild_owner()
     @_cooldown()
-    async def selectsearch(self, interaction: Interaction) -> None:
+    async def select(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
