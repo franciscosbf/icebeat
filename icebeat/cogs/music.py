@@ -143,13 +143,13 @@ class Music(commands.Cog):
         self._bot = bot
 
     @app_commands.command(description="player whatever you want")
-    @app_commands.describe(search="link or normal search as if you were on YouTube")
+    @app_commands.describe(query="link or normal search as if you were on YouTube")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
     @_cooldown()
-    async def play(self, interaction: Interaction, search: str) -> None:
-        _, _ = interaction, search
+    async def play(self, interaction: Interaction, query: str) -> None:
+        _, _ = interaction, query
         pass  # TODO: implement
 
     @app_commands.command(description="stops the player")
