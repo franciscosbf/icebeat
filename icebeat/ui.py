@@ -131,7 +131,11 @@ class InteractionPagination(_BasePagination):
         await original_response.edit(view=None)
 
     async def _send_message(self, *, embed: Embed, view: Optional[View] = None) -> None:
-        await self._interaction.response.send_message(embed=embed, view=view)  # pyright: ignore[reportArgumentType]
+        await self._interaction.response.send_message(
+            embed=embed,
+            view=view,  # pyright: ignore[reportArgumentType]
+            ephemeral=True,
+        )
 
     async def _edit_message(self, *, embed: Embed, view: View) -> None:
         await self._interaction.response.edit_message(embed=embed, view=view)
