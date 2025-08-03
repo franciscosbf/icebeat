@@ -6,7 +6,6 @@ import discord
 from discord.ext import commands
 
 from ..ui import ContextPagination
-from .music import Music
 
 
 if TYPE_CHECKING:
@@ -88,7 +87,7 @@ class Owner(commands.Cog):
                 embed.description = f"Server **{guild.name}** (ID: **{guild.id}**) is already whitelisted"
             await ctx.send(embed=embed)
 
-            await self._bot.add_cog_app_commands_to_guild(Music.__cog_name__, guild)
+            await self._bot.add_app_commands_to_guild(guild)
 
             return
 
@@ -123,7 +122,7 @@ class Owner(commands.Cog):
         if guild.id not in whitelist.guild_ids:
             embed = Embed(title="Server isn't whitelisted", color=Color.yellow())
         else:
-            await self._bot.add_cog_app_commands_to_guild(Music.__cog_name__, guild)
+            await self._bot.add_app_commands_to_guild(guild)
 
             embed = Embed(title="Commands synced with success", color=Color.green())
         await ctx.send(embed=embed)

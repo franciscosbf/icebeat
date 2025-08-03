@@ -107,12 +107,10 @@ class IceBeat(commands.Bot):
 
         await self.connect(reconnect=True)
 
-    async def add_cog_app_commands_to_guild(self, cog_name: str, guild: Guild) -> None:
-        cog = self.get_cog(cog_name)
-        assert cog is not None, f"cog {cog_name} must be registered"
-
-        for command in cog.get_app_commands():
-            self.tree.add_command(command, guild=guild, override=True)
+    async def add_app_commands_to_guild(self, guild: Guild) -> None:
+        for cog in self.cogs.values():
+            for command in cog.get_app_commands():
+                self.tree.add_command(command, guild=guild, override=True)
         await self.tree.sync(guild=guild)
 
     async def remove_app_commands_from_guild(self, guild: Guild) -> None:
