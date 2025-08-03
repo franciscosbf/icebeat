@@ -47,6 +47,11 @@ class Storage(ABC):
     async def set_auto_leave(self, guild_id: int, auto_leave: bool) -> None: ...
 
     @abstractmethod
+    async def set_optional_search(
+        self, guild_id: int, optional_search: bool
+    ) -> None: ...
+
+    @abstractmethod
     async def get_whitelist(self) -> Whitelist: ...
 
     @abstractmethod

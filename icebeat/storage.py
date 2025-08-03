@@ -41,8 +41,6 @@ class _ExtendedConnection:
         async with self._connection.execute(sql, parameters):
             pass
 
-        await self._connection.commit()
-
     async def execute_auto_closable_commited(
         self, sql: str, parameters: Optional[Iterable[Any]] = None
     ) -> None:
@@ -63,7 +61,7 @@ class SQLiteStorage(Storage):
     async def get_guild(self, guild_id: int) -> Guild:
         async with self._connection.execute(
             """
-            SELECT text_channel_id, filter, volume, auto_leave
+            SELECT text_channel_id, filter, volume, auto_leave, optional_search
             FROM guilds
             WHERE id = ?
         """,
@@ -77,6 +75,7 @@ class SQLiteStorage(Storage):
             filter=row[1],
             volume=row[2],
             auto_leave=bool(row[3]),
+            optional_search=bool(row[4]),
         )
 
     async def create_guild(self, guild_id: int) -> Guild:
@@ -139,6 +138,17 @@ class SQLiteStorage(Storage):
             DO UPDATE SET auto_leave = :auto_leave
         """,
             {"id": guild_id, "auto_leave": int(auto_leave)},
+        )
+
+    async def set_optional_search(self, guild_id: int, optional_search: bool) -> None:
+        await self._connection.execute_auto_closable_commited(
+            """
+            INSERT INTO guilds (id, auto_leave)
+            VALUES (:id, :auto_leave)
+            ON CONFLICT (id)
+            DO UPDATE SET optional_search = :optional_search
+        """,
+            {"id": guild_id, "optional_search": int(optional_search)},
         )
 
     async def get_whitelist(self) -> Whitelist:

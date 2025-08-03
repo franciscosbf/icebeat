@@ -4,5 +4,6 @@ CREATE TABLE IF NOT EXISTS guilds (
   filter INTEGER NOT NULL DEFAULT 0,
   volume REAL NOT NULL DEFAULT 1.0,
   auto_leave INTEGER NOT NULL DEFAULT 1,
+  optional_search INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (id) REFERENCES whitelist (guild_id)
 );
