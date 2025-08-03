@@ -6,13 +6,13 @@ __all__ = ["Filter", "Guild"]
 
 
 class Filter(Enum):
-    NORMAL = 0
-    BASS_BOOST = 1
-    POP = 2
-    SOFT = 3
-    TREBLLEBASS = 4
-    EIGHTD = 5
-    KARAOKE = 6
+    normal = 0
+    bass_boost = 1
+    pop = 2
+    soft = 3
+    trebllebass = 4
+    eightd = 5
+    karaoke = 6
 
 
 @dataclass
@@ -22,6 +22,7 @@ class Guild:
     filter: Filter
     volume: float
     auto_leave: bool
+    optional_search: bool
 
 
 @dataclass
