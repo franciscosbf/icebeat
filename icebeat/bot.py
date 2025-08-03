@@ -51,21 +51,21 @@ class IceBeat(commands.Bot):
 
         self.store = store
 
-    async def _verify_whitelisted_guild(self, guild_id: int) -> None:
-        try:
-            await self.fetch_guild_preview(guild_id)
-        except discord.NotFound:
-            await self.store.remove_from_whitelist(guild_id)
+    async def _verify_whitelisted_guilds(self) -> None:
+        for guild_id in (await self.store.get_whitelist()).guild_ids:
+            try:
+                await self.fetch_guild_preview(guild_id)
+            except discord.NotFound:
+                await self.store.remove_from_whitelist(guild_id)
 
-            __log__.info(
-                f"Server {guild_id} was removed from whitelist as I couldn't find it"
-            )
+                __log__.info(
+                    f"Server {guild_id} was removed from whitelist as I couldn't find it"
+                )
 
     async def setup_hook(self) -> None:
         await self.add_cog(Owner(self))
 
-        for guild_id in (await self.store.get_whitelist()).guild_ids:
-            await self._verify_whitelisted_guild(guild_id)
+        await self._verify_whitelisted_guilds()
 
         whitelist = await self.store.get_whitelist()
         whitelisted_guilds = [Object(id=guild_id) for guild_id in whitelist.guild_ids]
@@ -86,6 +86,9 @@ class IceBeat(commands.Bot):
     async def on_resumed(self) -> None:
         __log__.info("Session was resumed")
 
+    async def on_guild_join(self, guild: Guild) -> None:
+        await self.remove_app_commands_from_guild(guild)
+
     async def on_guild_remove(self, guild: Guild) -> None:
         await self.store.remove_from_whitelist(guild.id)
 
@@ -103,3 +106,15 @@ class IceBeat(commands.Bot):
         self.lavalink_client = lavalink_client
 
         await self.connect(reconnect=True)
+
+    async def add_cog_app_commands_to_guild(self, cog_name: str, guild: Guild) -> None:
+        cog = self.get_cog(cog_name)
+        assert cog is not None, f"cog {cog_name} must be registered"
+
+        for command in cog.get_app_commands():
+            self.tree.add_command(command, guild=guild, override=True)
+        await self.tree.sync(guild=guild)
+
+    async def remove_app_commands_from_guild(self, guild: Guild) -> None:
+        self.tree.clear_commands(guild=guild)
+        await self.tree.sync(guild=guild)

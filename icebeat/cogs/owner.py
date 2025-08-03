@@ -5,7 +5,8 @@ from discord import Color, Embed, Guild
 import discord
 from discord.ext import commands
 
-from icebeat.ui import ContextPagination
+from ..ui import ContextPagination
+from .music import Music
 
 
 if TYPE_CHECKING:
@@ -87,7 +88,7 @@ class Owner(commands.Cog):
                 embed.description = f"Server **{guild.name}** (ID: **{guild.id}**) is already whitelisted"
             await ctx.send(embed=embed)
 
-            await self._bot.tree.sync(guild=guild)
+            await self._bot.add_cog_app_commands_to_guild(Music.__cog_name__, guild)
 
             return
 
@@ -111,9 +112,26 @@ class Owner(commands.Cog):
             )
         await ctx.send(embed=embed)
 
+        await self._bot.remove_app_commands_from_guild(guild)
+
+    @commands.command()
+    @commands.dm_only()
+    @commands.is_owner()
+    @commands.cooldown(_COOLDOWN_RATE, _COOLDOWN_PER)
+    async def sync(self, ctx: commands.Context, guild: Guild) -> None:
+        whitelist = await self._bot.store.get_whitelist()
+        if guild.id not in whitelist.guild_ids:
+            embed = Embed(title="Server isn't whitelisted", color=Color.yellow())
+        else:
+            await self._bot.add_cog_app_commands_to_guild(Music.__cog_name__, guild)
+
+            embed = Embed(title="Commands synced with success", color=Color.green())
+        await ctx.send(embed=embed)
+
     @whitelist.error
     @blacklist.error
-    async def whitelist_and_blacklist_error_handler(
+    @sync.error
+    async def guilds_error_handler(
         self, ctx: commands.Context, error: commands.CommandError
     ) -> None:
         if isinstance(error, commands.BadArgument):
