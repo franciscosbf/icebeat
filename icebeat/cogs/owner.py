@@ -87,6 +87,8 @@ class Owner(commands.Cog):
                 embed.description = f"Server **{guild.name}** (ID: **{guild.id}**) is already whitelisted"
             await ctx.send(embed=embed)
 
+            await self._bot.tree.sync(guild=guild)
+
             return
 
         pagination = ContextPagination(
