@@ -20,7 +20,7 @@ from .cogs import Owner, Music
 __all__ = ["IceBeat"]
 
 
-_PREFIX = "!"
+_PREFIX = "/"
 _DESCRIPTION = "IceBeat, a sort of jukebox"
 _STATUS = Status.online
 _ACTIVITY = Game(name="music")
@@ -58,7 +58,7 @@ class IceBeat(commands.Bot):
             await self.store.remove_from_whitelist(guild_id)
 
             __log__.info(
-                f"Servers {guild_id} was removed from whitelist as I couldn't find it"
+                f"Server {guild_id} was removed from whitelist as I couldn't find it"
             )
 
     async def setup_hook(self) -> None:
