@@ -129,7 +129,18 @@ class SQLiteStorage(Storage):
             {"id": guild_id, "filter": filter},
         )
 
-    async def set_auto_leave(self, guild_id: int, auto_leave: bool) -> None:
+    async def set_guild_volume(self, guild_id: int, volume: int) -> None:
+        await self._connection.execute_auto_closable_commited(
+            """
+            INSERT INTO guilds (id, volume)
+            VALUES (:id, :volume)
+            ON CONFLICT (id)
+            DO UPDATE SET volume = :volume
+        """,
+            {"id": guild_id, "volume": volume},
+        )
+
+    async def set_guild_auto_leave(self, guild_id: int, auto_leave: bool) -> None:
         await self._connection.execute_auto_closable_commited(
             """
             INSERT INTO guilds (id, auto_leave)

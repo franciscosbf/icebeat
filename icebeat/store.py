@@ -44,7 +44,10 @@ class Storage(ABC):
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None: ...
 
     @abstractmethod
-    async def set_auto_leave(self, guild_id: int, auto_leave: bool) -> None: ...
+    async def set_guild_volume(self, guild_id: int, volume: int) -> None: ...
+
+    @abstractmethod
+    async def set_guild_auto_leave(self, guild_id: int, auto_leave: bool) -> None: ...
 
     @abstractmethod
     async def set_optional_search(
@@ -84,22 +87,27 @@ class Store:
     async def set_guild_text_channel_id(
         self, guild_id: int, text_channel_id: int
     ) -> None:
-        await self.set_guild_text_channel_id(guild_id, text_channel_id)
+        await self._storage.set_guild_text_channel_id(guild_id, text_channel_id)
 
         (await self.get_guild(guild_id)).text_channel_id = text_channel_id
 
     async def unset_guild_text_channel_id(self, guild_id: int) -> None:
-        await self.unset_guild_text_channel_id(guild_id)
+        await self._storage.unset_guild_text_channel_id(guild_id)
 
         (await self.get_guild(guild_id)).text_channel_id = None
 
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None:
-        await self.set_guild_filter(guild_id, filter)
+        await self._storage.set_guild_filter(guild_id, filter)
 
         (await self.get_guild(guild_id)).filter = filter
 
-    async def set_auto_leave(self, guild_id: int, auto_leave: bool) -> None:
-        await self.set_auto_leave(guild_id, auto_leave)
+    async def set_guild_volume(self, guild_id: int, volume: int) -> None:
+        await self._storage.set_guild_volume(guild_id, volume)
+
+        (await self.get_guild(guild_id)).volume = volume
+
+    async def set_guild_auto_leave(self, guild_id: int, auto_leave: bool) -> None:
+        await self._storage.set_guild_auto_leave(guild_id, auto_leave)
 
         (await self.get_guild(guild_id)).auto_leave = auto_leave
 

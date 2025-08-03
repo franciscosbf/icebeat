@@ -20,7 +20,7 @@ class Guild:
     id: int
     text_channel_id: Optional[int]
     filter: Filter
-    volume: float
+    volume: int
     auto_leave: bool
     optional_search: bool
 
