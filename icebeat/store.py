@@ -33,14 +33,6 @@ class Storage(ABC):
     async def create_guild(self, guild_id: int) -> Guild: ...
 
     @abstractmethod
-    async def set_guild_text_channel_id(
-        self, guild_id: int, text_channel_id: int
-    ) -> None: ...
-
-    @abstractmethod
-    async def unset_guild_text_channel_id(self, guild_id: int) -> None: ...
-
-    @abstractmethod
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None: ...
 
     @abstractmethod
@@ -83,18 +75,6 @@ class Store:
 
     async def create_guild(self, guild_id: int) -> None:
         await self.get_guild(guild_id)
-
-    async def set_guild_text_channel_id(
-        self, guild_id: int, text_channel_id: int
-    ) -> None:
-        await self._storage.set_guild_text_channel_id(guild_id, text_channel_id)
-
-        (await self.get_guild(guild_id)).text_channel_id = text_channel_id
-
-    async def unset_guild_text_channel_id(self, guild_id: int) -> None:
-        await self._storage.unset_guild_text_channel_id(guild_id)
-
-        (await self.get_guild(guild_id)).text_channel_id = None
 
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None:
         await self._storage.set_guild_filter(guild_id, filter)

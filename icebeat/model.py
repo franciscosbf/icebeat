@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 __all__ = ["Filter", "Guild"]
 
@@ -18,7 +17,6 @@ class Filter(Enum):
 @dataclass
 class Guild:
     id: int
-    text_channel_id: Optional[int]
     filter: Filter
     volume: int
     auto_leave: bool

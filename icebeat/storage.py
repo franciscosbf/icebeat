@@ -71,7 +71,6 @@ class SQLiteStorage(Storage):
 
         return Guild(
             id=guild_id,
-            text_channel_id=row[0],
             filter=row[1],
             volume=row[2],
             auto_leave=bool(row[3]),
@@ -90,33 +89,6 @@ class SQLiteStorage(Storage):
         )
 
         return await self.get_guild(guild_id)
-
-    async def set_guild_text_channel_id(
-        self, guild_id: int, text_channel_id: int
-    ) -> None:
-        await self._connection.execute_auto_closable_commited(
-            """
-            INSERT INTO guilds (id, text_channel_id)
-            VALUES (:id, :text_channel_id)
-            ON CONFLICT (id)
-            DO UPDATE SET text_channel_id = :text_channel_id
-        """,
-            {
-                "id": guild_id,
-                "text_channel_id": text_channel_id,
-            },
-        )
-
-    async def unset_guild_text_channel_id(self, guild_id: int) -> None:
-        await self._connection.execute_auto_closable_commited(
-            """
-            INSERT INTO guilds (id, text_channel_id)
-            VALUES (?, null)
-            ON CONFLICT (id)
-            DO UPDATE SET text_channel_id = null
-        """,
-            (guild_id,),
-        )
 
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None:
         await self._connection.execute_auto_closable_commited(
