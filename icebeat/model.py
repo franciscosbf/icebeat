@@ -7,10 +7,10 @@ __all__ = ["Filter", "Guild"]
 
 class Filter(Enum):
     normal = 0
-    bass_boost = 1
+    bassboost = 1
     pop = 2
     soft = 3
-    trebllebass = 4
+    treblebass = 4
     eightd = 5
     karaoke = 6
 
