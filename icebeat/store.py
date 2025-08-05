@@ -39,6 +39,11 @@ class Storage(ABC):
     async def create_guild(self, guild_id: int) -> Guild: ...
 
     @abstractmethod
+    async def set_guild_text_channel(
+        self, guild_id: int, text_channel: bool
+    ) -> None: ...
+
+    @abstractmethod
     async def set_guild_text_channel_id(
         self, guild_id: int, text_channel_id: int
     ) -> None: ...

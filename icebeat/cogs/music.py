@@ -7,6 +7,7 @@ from discord import (
     Embed,
     Interaction,
     Permissions,
+    TextChannel,
     VoiceChannel,
     VoiceProtocol,
     app_commands,
@@ -66,6 +67,37 @@ def _is_guild_owner() -> Callable[[app_commands.checks.T], app_commands.checks.T
         if interaction.user.id == interaction.guild.owner_id:  # pyright: ignore[reportOptionalMemberAccess]
             return True
         raise _NotGuildOwner()
+
+    return app_commands.check(predicate)
+
+
+class _HasTextChannelSet(app_commands.CheckFailure):
+    __slots__ = ("channel_id",)
+
+    def __init__(self, channel_id: int) -> None:
+        self.channel_id = channel_id
+
+
+class _HasTextEnabledAndNotSet(app_commands.CheckFailure):
+    pass
+
+
+def _has_text_channel_set() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
+    async def predicate(interaction: Interaction) -> bool:
+        bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
+
+        guild = await bot.store.get_guild(interaction.guild_id)  # pyright: ignore[reportArgumentType]
+        text_channel_id = guild.text_channel_id
+        if guild.text_channel:
+            if text_channel_id:
+                if interaction.guild.get_channel(text_channel_id):  # pyright: ignore[reportOptionalMemberAccess]
+                    if interaction.channel_id == text_channel_id:
+                        return True
+                    raise _HasTextChannelSet(text_channel_id)
+                else:
+                    await bot.store.unset_guild_text_channel_id(guild.id)
+            raise _HasTextEnabledAndNotSet()
+        return True
 
     return app_commands.check(predicate)
 
@@ -147,6 +179,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_cooldown()
     async def play(self, interaction: Interaction, query: str) -> None:
         _, _ = interaction, query
@@ -156,6 +189,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_cooldown()
     async def pause(self, interaction: Interaction) -> None:
         _ = interaction
@@ -165,6 +199,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_cooldown()
     async def resume(self, interaction: Interaction) -> None:
         _ = interaction
@@ -174,6 +209,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_cooldown()
     async def skip(self, interaction: Interaction) -> None:
         _ = interaction
@@ -183,6 +219,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_cooldown()
     async def queue(self, interaction: Interaction) -> None:
         _ = interaction
@@ -192,6 +229,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_cooldown()
     async def shuffle(self, interaction: Interaction) -> None:
         _ = interaction
@@ -202,6 +240,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def volume(
@@ -215,6 +254,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def filter(self, interaction: Interaction, name: Filter) -> None:
@@ -232,6 +272,7 @@ class Music(commands.Cog):
         description="bot won't leave the voice channel if the queue is empty"
     )
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def stay(self, interaction: Interaction) -> None:
@@ -242,6 +283,7 @@ class Music(commands.Cog):
         description="bot will remain in the voice channel if the queue is empty"
     )
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def leave(self, interaction: Interaction) -> None:
@@ -259,6 +301,7 @@ class Music(commands.Cog):
         description="if a normal search is provided, the bot will select the first result"
     )
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def auto(self, interaction: Interaction) -> None:
@@ -269,9 +312,53 @@ class Music(commands.Cog):
         description="if a normal search is provided, you will be able to select between multiple results"
     )
     @_is_whitelisted()
+    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def select(self, interaction: Interaction) -> None:
+        _ = interaction
+        pass  # TODO: implement
+
+    _channel_group = app_commands.Group(
+        name="channel",
+        description="manage text channel to send commands",
+        guild_only=True,
+        default_permissions=_DEFAULT_PERMISSIONS,
+    )
+
+    @_channel_group.command(description="enable exclusive text channel mode, if set")
+    @_is_whitelisted()
+    @_has_text_channel_set()
+    @_is_guild_owner()
+    @_cooldown()
+    async def enable(self, interaction: Interaction) -> None:
+        _ = interaction
+        pass  # TODO: implement
+
+    @_channel_group.command(description="disable exclusive text channel mode, if set")
+    @_is_whitelisted()
+    @_has_text_channel_set()
+    @_is_guild_owner()
+    @_cooldown()
+    async def disable(self, interaction: Interaction) -> None:
+        _ = interaction
+        pass  # TODO: implement
+
+    @_channel_group.command(description="set text channel mode")
+    @_is_whitelisted()
+    @_has_text_channel_set()
+    @_is_guild_owner()
+    @_cooldown()
+    async def set(self, interaction: Interaction, text_channel: TextChannel) -> None:
+        _, _ = interaction, text_channel
+        pass  # TODO: implement
+
+    @_channel_group.command(description="unset text channel mode")
+    @_is_whitelisted()
+    @_has_text_channel_set()
+    @_is_guild_owner()
+    @_cooldown()
+    async def unset(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
@@ -286,6 +373,18 @@ class Music(commands.Cog):
         elif isinstance(error, _NotGuildOwner):
             embed = Embed(
                 title="Only the server owner is allowed to execute this command",
+                color=Color.yellow(),
+            )
+        elif isinstance(error, _HasTextChannelSet):
+            embed = Embed(
+                title="Exclusive text channel is set",
+                description=f"Hop onto <#{error.channel_id}> to communicate with me",
+                color=Color.yellow(),
+            )
+        elif isinstance(error, _HasTextEnabledAndNotSet):
+            embed = Embed(
+                title="Exclusive text channel is enabled but not set",
+                description="Please contact the server owner",
                 color=Color.yellow(),
             )
         elif isinstance(error, app_commands.CommandOnCooldown):

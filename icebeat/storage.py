@@ -61,7 +61,7 @@ class SQLiteStorage(Storage):
     async def get_guild(self, guild_id: int) -> Guild:
         async with self._connection.execute(
             """
-            SELECT text_channel_id, filter, volume, auto_leave, optional_search
+            SELECT text_channel, text_channel_id, filter, volume, auto_leave, optional_search
             FROM guilds
             WHERE id = ?
         """,
@@ -71,11 +71,12 @@ class SQLiteStorage(Storage):
 
         return Guild(
             id=guild_id,
-            text_channel_id=row[0],
-            filter=row[1],
-            volume=row[2],
-            auto_leave=bool(row[3]),
-            optional_search=bool(row[4]),
+            text_channel=bool(row[0]),
+            text_channel_id=row[1],
+            filter=row[2],
+            volume=row[3],
+            auto_leave=bool(row[4]),
+            optional_search=bool(row[5]),
         )
 
     async def create_guild(self, guild_id: int) -> Guild:
@@ -90,6 +91,17 @@ class SQLiteStorage(Storage):
         )
 
         return await self.get_guild(guild_id)
+
+    async def set_guild_text_channel(self, guild_id: int, text_channel: bool) -> None:
+        await self._connection.execute_auto_closable_commited(
+            """
+            INSERT INTO guilds (id, text_channel)
+            VALUES (:id, :text_channel)
+            ON CONFLICT (id)
+            DO UPDATE SET text_channel = :text_channel
+        """,
+            {"id": guild_id, "text_channel": int(text_channel)},
+        )
 
     async def set_guild_text_channel_id(
         self, guild_id: int, text_channel_id: int

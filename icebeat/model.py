@@ -18,6 +18,7 @@ class Filter(Enum):
 @dataclass
 class Guild:
     id: int
+    text_channel: bool
     text_channel_id: Optional[int]
     filter: Filter
     volume: int

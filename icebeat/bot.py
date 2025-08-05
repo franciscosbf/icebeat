@@ -92,6 +92,9 @@ class IceBeat(commands.Bot):
     async def on_guild_remove(self, guild: Guild) -> None:
         await self.store.remove_from_whitelist(guild.id)
 
+    async def on_channel_remove(self, guild: Guild) -> None:
+        await self.store.unset_guild_text_channel_id(guild.id)
+
     async def on_error(self, event_method: str, /, *args: Any, **kwargs: Any) -> None:
         _, _ = args, kwargs
 
@@ -116,3 +119,6 @@ class IceBeat(commands.Bot):
     async def remove_app_commands_from_guild(self, guild: Guild) -> None:
         self.tree.clear_commands(guild=guild)
         await self.tree.sync(guild=guild)
+
+        for command in await self.tree.fetch_commands(guild=guild):
+            await self.http.delete_guild_command(self.client.id, guild.id, command.id)  # pyright: ignore[reportAttributeAccessIssue]
