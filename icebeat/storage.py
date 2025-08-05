@@ -84,7 +84,7 @@ class SQLiteStorage(Storage):
             """
             INSERT INTO guilds (id)
             VALUES (?)
-            ON CONFLICT (guild_id)
+            ON CONFLICT (id)
             DO NOTHING
         """,
             (guild_id,),
