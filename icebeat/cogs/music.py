@@ -45,7 +45,7 @@ class _GuildNotWhitelisted(app_commands.CheckFailure):
     pass
 
 
-def _is_whitelisted():
+def _is_whitelisted() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
     async def predicate(interaction: Interaction) -> bool:
         bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
 
@@ -61,7 +61,7 @@ class _NotGuildOwner(app_commands.CheckFailure):
     pass
 
 
-def _is_guild_owner():
+def _is_guild_owner() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
     def predicate(interaction: Interaction) -> bool:
         if interaction.user.id == interaction.guild.owner_id:  # pyright: ignore[reportOptionalMemberAccess]
             return True
