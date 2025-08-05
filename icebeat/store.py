@@ -16,10 +16,16 @@ class Cache(ABC):
     def set_guild(self, guild: Guild) -> None: ...
 
     @abstractmethod
+    def invalidate_guild(self, guild_id: int) -> None: ...
+
+    @abstractmethod
     def get_whitelist(self) -> Optional[Whitelist]: ...
 
     @abstractmethod
     def set_whitelist(self, whitelist: Whitelist) -> None: ...
+
+    @abstractmethod
+    def invalidate_whitelist(self) -> None: ...
 
 
 class Storage(ABC):
@@ -89,27 +95,27 @@ class Store:
     ) -> None:
         await self._storage.set_guild_text_channel_id(guild_id, text_channel_id)
 
-        (await self.get_guild(guild_id)).text_channel_id = text_channel_id
+        self._cache.invalidate_guild(guild_id)
 
     async def unset_guild_text_channel_id(self, guild_id: int) -> None:
         await self._storage.unset_guild_text_channel_id(guild_id)
 
-        (await self.get_guild(guild_id)).text_channel_id = None
+        self._cache.invalidate_guild(guild_id)
 
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None:
         await self._storage.set_guild_filter(guild_id, filter)
 
-        (await self.get_guild(guild_id)).filter = filter
+        self._cache.invalidate_guild(guild_id)
 
     async def set_guild_volume(self, guild_id: int, volume: int) -> None:
         await self._storage.set_guild_volume(guild_id, volume)
 
-        (await self.get_guild(guild_id)).volume = volume
+        self._cache.invalidate_guild(guild_id)
 
     async def set_guild_auto_leave(self, guild_id: int, auto_leave: bool) -> None:
         await self._storage.set_guild_auto_leave(guild_id, auto_leave)
 
-        (await self.get_guild(guild_id)).auto_leave = auto_leave
+        self._cache.invalidate_guild(guild_id)
 
     async def get_whitelist(self) -> Whitelist:
         whitelist = self._cache.get_whitelist()
@@ -123,13 +129,13 @@ class Store:
     async def add_to_whitelist(self, guild_id: int) -> bool:
         inserted = await self._storage.add_to_whitelist(guild_id)
 
-        (await self.get_whitelist()).guild_ids.add(guild_id)
+        self._cache.invalidate_whitelist()
 
         return inserted
 
     async def remove_from_whitelist(self, guild_id: int) -> bool:
         removed = await self._storage.remove_from_whitelist(guild_id)
 
-        (await self.get_whitelist()).guild_ids.discard(guild_id)
+        self._cache.invalidate_whitelist()
 
         return removed
