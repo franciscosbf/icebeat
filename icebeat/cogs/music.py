@@ -269,24 +269,26 @@ class Music(commands.Cog):
     )
 
     @_presence_group.command(
-        description="bot won't leave the voice channel if the queue is empty"
+        name="presence",
+        description="bot won't leave the voice channel if the queue is empty",
     )
     @_is_whitelisted()
     @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
-    async def stay(self, interaction: Interaction) -> None:
+    async def presence_stay(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
     @_presence_group.command(
-        description="bot will remain in the voice channel if the queue is empty"
+        name="leave",
+        description="bot will remain in the voice channel if the queue is empty",
     )
     @_is_whitelisted()
     @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
-    async def leave(self, interaction: Interaction) -> None:
+    async def presence_leave(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
@@ -298,24 +300,26 @@ class Music(commands.Cog):
     )
 
     @_search_group.command(
-        description="if a normal search is provided, the bot will select the first result"
+        name="auto",
+        description="if a normal search is provided, the bot will select the first result",
     )
     @_is_whitelisted()
     @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
-    async def auto(self, interaction: Interaction) -> None:
+    async def search_auto(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
     @_search_group.command(
-        description="if a normal search is provided, you will be able to select between multiple results"
+        name="select",
+        description="if a normal search is provided, you will be able to select between multiple results",
     )
     @_is_whitelisted()
     @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
-    async def select(self, interaction: Interaction) -> None:
+    async def search_select(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
@@ -326,39 +330,45 @@ class Music(commands.Cog):
         default_permissions=_DEFAULT_PERMISSIONS,
     )
 
-    @_channel_group.command(description="enable exclusive text channel mode, if set")
+    @_channel_group.command(
+        name="enable", description="enable exclusive text channel mode, if set"
+    )
     @_is_whitelisted()
     @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
-    async def enable(self, interaction: Interaction) -> None:
+    async def channel_enable(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
-    @_channel_group.command(description="disable exclusive text channel mode, if set")
+    @_channel_group.command(
+        name="disable", description="disable exclusive text channel mode, if set"
+    )
     @_is_whitelisted()
     @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
-    async def disable(self, interaction: Interaction) -> None:
+    async def channel_disable(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
-    @_channel_group.command(description="set text channel mode")
+    @_channel_group.command(name="set", description="set text channel mode")
     @_is_whitelisted()
     @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
-    async def set(self, interaction: Interaction, text_channel: TextChannel) -> None:
+    async def channel_set(
+        self, interaction: Interaction, text_channel: TextChannel
+    ) -> None:
         _, _ = interaction, text_channel
         pass  # TODO: implement
 
-    @_channel_group.command(description="unset text channel mode")
+    @_channel_group.command(name="unset", description="unset text channel mode")
     @_is_whitelisted()
     @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
-    async def unset(self, interaction: Interaction) -> None:
+    async def channel_unset(self, interaction: Interaction) -> None:
         _ = interaction
         pass  # TODO: implement
 
