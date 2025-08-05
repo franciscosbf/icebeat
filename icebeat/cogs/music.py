@@ -269,7 +269,7 @@ class Music(commands.Cog):
     )
 
     @_presence_group.command(
-        name="presence",
+        name="stay",
         description="bot won't leave the voice channel if the queue is empty",
     )
     @_is_whitelisted()
