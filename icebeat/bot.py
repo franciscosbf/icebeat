@@ -92,7 +92,7 @@ class IceBeat(commands.Bot):
     async def on_guild_remove(self, guild: Guild) -> None:
         await self.store.remove_from_whitelist(guild.id)
 
-    async def on_channel_remove(self, guild: Guild) -> None:
+    async def on_guild_channel_delete(self, guild: Guild) -> None:
         await self.store.unset_guild_text_channel_id(guild.id)
 
     async def on_error(self, event_method: str, /, *args: Any, **kwargs: Any) -> None:

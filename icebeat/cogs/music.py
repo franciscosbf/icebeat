@@ -240,7 +240,6 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
-    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def volume(
@@ -254,7 +253,6 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
-    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def filter(self, interaction: Interaction, name: Filter) -> None:
@@ -273,7 +271,6 @@ class Music(commands.Cog):
         description="bot won't leave the voice channel if the queue is empty",
     )
     @_is_whitelisted()
-    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def presence_stay(self, interaction: Interaction) -> None:
@@ -285,7 +282,6 @@ class Music(commands.Cog):
         description="bot will remain in the voice channel if the queue is empty",
     )
     @_is_whitelisted()
-    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def presence_leave(self, interaction: Interaction) -> None:
@@ -304,7 +300,6 @@ class Music(commands.Cog):
         description="if a normal search is provided, the bot will select the first result",
     )
     @_is_whitelisted()
-    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def search_auto(self, interaction: Interaction) -> None:
@@ -316,7 +311,6 @@ class Music(commands.Cog):
         description="if a normal search is provided, you will be able to select between multiple results",
     )
     @_is_whitelisted()
-    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def search_select(self, interaction: Interaction) -> None:
@@ -331,46 +325,104 @@ class Music(commands.Cog):
     )
 
     @_channel_group.command(
+        name="status", description="current state of exclusive text channel mode"
+    )
+    @_is_whitelisted()
+    @_is_guild_owner()
+    @_cooldown()
+    async def channel_status(self, interaction: Interaction) -> None:
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        guild = await self._bot.store.get_guild(guild_id)  # pyright: ignore[reportArgumentType]
+
+        state = "enabled" if guild.text_channel else "disabled"
+        text_channel = "not set"
+        if guild.text_channel_id:
+            if not interaction.guild.get_channel(guild.text_channel_id):  # pyright: ignore[reportOptionalMemberAccess]
+                await self._bot.store.unset_guild_text_channel_id(guild_id)
+            else:
+                text_channel = f"<#{guild.text_channel_id}>"
+        embed = Embed(
+            title="Exclusive Text Channel State:",
+            color=Color.green(),
+        )
+        embed.add_field(name="State", value=f"_{state}_")
+        embed.add_field(name="Text Channel", value=text_channel)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @_channel_group.command(
         name="enable", description="enable exclusive text channel mode, if set"
     )
     @_is_whitelisted()
-    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def channel_enable(self, interaction: Interaction) -> None:
-        _ = interaction
-        pass  # TODO: implement
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        guild = await self._bot.store.get_guild(guild_id)
+        if guild.text_channel:
+            embed = Embed(
+                title="Exclusive text channel is already enabled", color=Color.green()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        await self._bot.store.set_guild_text_channel(
+            guild_id,
+            text_channel=True,
+        )
+
+        embed = Embed(
+            title="Exclusive text channel mode has been enabled", color=Color.green()
+        )
+        guild = await self._bot.store.get_guild(guild_id)
+        if not guild.text_channel_id:
+            embed.set_footer(text="Note: do not forget to set a text channel")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @_channel_group.command(
         name="disable", description="disable exclusive text channel mode, if set"
     )
     @_is_whitelisted()
-    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
     async def channel_disable(self, interaction: Interaction) -> None:
-        _ = interaction
-        pass  # TODO: implement
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        guild = await self._bot.store.get_guild(guild_id)
+        if not guild.text_channel:
+            embed = Embed(
+                title="Exclusive text channel is already disabled", color=Color.green()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        await self._bot.store.set_guild_text_channel(
+            guild_id,  # pyright: ignore[reportArgumentType]
+            text_channel=False,
+        )
+
+        embed = Embed(
+            title="Exclusive text channel mode has been disabled", color=Color.green()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @_channel_group.command(name="set", description="set text channel mode")
+    @app_commands.describe(channel="text channel")
     @_is_whitelisted()
-    @_has_text_channel_set()
     @_is_guild_owner()
     @_cooldown()
-    async def channel_set(
-        self, interaction: Interaction, text_channel: TextChannel
-    ) -> None:
-        _, _ = interaction, text_channel
-        pass  # TODO: implement
+    async def channel_set(self, interaction: Interaction, channel: TextChannel) -> None:
+        await self._bot.store.set_guild_text_channel_id(
+            interaction.guild_id,  # pyright: ignore[reportArgumentType]
+            channel.id,
+        )
 
-    @_channel_group.command(name="unset", description="unset text channel mode")
-    @_is_whitelisted()
-    @_has_text_channel_set()
-    @_is_guild_owner()
-    @_cooldown()
-    async def channel_unset(self, interaction: Interaction) -> None:
-        _ = interaction
-        pass  # TODO: implement
+        embed = Embed(
+            title="Exclusive text channel was changed",
+            description=f"From now on, commands `play`, `queue` and `shuffle` will only be accepted in <#{channel.id}>",
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def cog_app_command_error(
         self, interaction: Interaction, error: app_commands.AppCommandError

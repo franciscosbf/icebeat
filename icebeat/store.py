@@ -95,6 +95,13 @@ class Store:
     async def create_guild(self, guild_id: int) -> None:
         await self.get_guild(guild_id)
 
+    async def set_guild_text_channel(
+        self, guild_id: int, *, text_channel: bool
+    ) -> None:
+        await self._storage.set_guild_text_channel(guild_id, text_channel)
+
+        self._cache.invalidate_guild(guild_id)
+
     async def set_guild_text_channel_id(
         self, guild_id: int, text_channel_id: int
     ) -> None:
@@ -112,12 +119,12 @@ class Store:
 
         self._cache.invalidate_guild(guild_id)
 
-    async def set_guild_volume(self, guild_id: int, volume: int) -> None:
+    async def set_guild_volume(self, guild_id: int, *, volume: int) -> None:
         await self._storage.set_guild_volume(guild_id, volume)
 
         self._cache.invalidate_guild(guild_id)
 
-    async def set_guild_auto_leave(self, guild_id: int, auto_leave: bool) -> None:
+    async def set_guild_auto_leave(self, guild_id: int, *, auto_leave: bool) -> None:
         await self._storage.set_guild_auto_leave(guild_id, auto_leave)
 
         self._cache.invalidate_guild(guild_id)

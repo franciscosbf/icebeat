@@ -19,7 +19,7 @@ class TimedCache(Cache):
         self.cache[guild.id] = guild
 
     def invalidate_guild(self, guild_id: int) -> None:
-        del self.cache[guild_id]
+        self.cache.pop(guild_id, default=None)
 
     def get_whitelist(self) -> Optional[Whitelist]:
         self.cache.get("whitelist", None)
