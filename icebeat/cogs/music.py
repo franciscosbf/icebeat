@@ -262,8 +262,17 @@ class Music(commands.Cog):
     async def volume(
         self, interaction: Interaction, level: app_commands.Range[int, 0, 1000]
     ) -> None:
-        _, _ = interaction, level
-        pass  # TODO: implement
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        player: lavalink.DefaultPlayer = self._bot.lavalink_client.player_manager.get(
+            guild_id
+        )  # pyright: ignore[reportAssignmentType]
+        await player.set_volume(vol=level)
+
+        await self._bot.store.set_guild_volume(guild_id, volume=level)
+
+        embed = Embed(title="Volume has been changed")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(description="sets player filter")
     @app_commands.describe(name="filter name")
