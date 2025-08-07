@@ -291,8 +291,17 @@ class Music(commands.Cog):
     @_bot_has_permissions()
     @_cooldown()
     async def presence_stay(self, interaction: Interaction) -> None:
-        _ = interaction
-        pass  # TODO: implement
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        guild = await self._bot.store.get_guild(guild_id)
+        embed = Embed(color=Color.green())
+        if not guild.auto_leave:
+            embed.title = "Stay mode is already set"
+        else:
+            await self._bot.store.set_guild_auto_leave(guild_id, auto_leave=False)
+
+            embed.title = "Stay mode has been activated"
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @_presence_group.command(
         name="leave",
@@ -303,8 +312,17 @@ class Music(commands.Cog):
     @_bot_has_permissions()
     @_cooldown()
     async def presence_leave(self, interaction: Interaction) -> None:
-        _ = interaction
-        pass  # TODO: implement
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        guild = await self._bot.store.get_guild(guild_id)
+        embed = Embed(color=Color.green())
+        if guild.auto_leave:
+            embed.title = "Leave mode is already set"
+        else:
+            await self._bot.store.set_guild_auto_leave(guild_id, auto_leave=True)
+
+            embed.title = "Leave mode has been activated"
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     _search_group = app_commands.Group(
         name="search",
