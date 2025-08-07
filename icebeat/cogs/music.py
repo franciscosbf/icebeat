@@ -29,7 +29,7 @@ __all__ = ["Music"]
 __log__ = logging.getLogger(__name__)
 
 
-_DEFAULT_PERMISSIONS = Permissions(connect=True, speak=True, send_messages=True)
+_DEFAULT_PERMISSIONS = Permissions(connect=True, speak=True)
 
 
 def _default_permissions() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
