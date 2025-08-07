@@ -73,7 +73,7 @@ class SQLiteStorage(Storage):
             id=guild_id,
             text_channel=bool(row[0]),
             text_channel_id=row[1],
-            filter=row[2],
+            filter=Filter(row[2]),
             volume=row[3],
             auto_leave=bool(row[4]),
             optional_search=bool(row[5]),
@@ -138,7 +138,7 @@ class SQLiteStorage(Storage):
             ON CONFLICT (id)
             DO UPDATE SET filter = :filter
         """,
-            {"id": guild_id, "filter": filter},
+            {"id": guild_id, "filter": filter.value},
         )
 
     async def set_guild_volume(self, guild_id: int, volume: int) -> None:
