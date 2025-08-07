@@ -238,7 +238,6 @@ class Music(commands.Cog):
     @app_commands.command(description="enables or disables shuffle mode")
     @app_commands.describe(level="volume level (the higher, the worst)")
     @app_commands.guild_only()
-    @_default_permissions()
     @_is_whitelisted()
     @_is_guild_owner()
     @_cooldown()
@@ -251,7 +250,6 @@ class Music(commands.Cog):
     @app_commands.command(description="sets player filter")
     @app_commands.describe(name="filter name")
     @app_commands.guild_only()
-    @_default_permissions()
     @_is_whitelisted()
     @_is_guild_owner()
     @_cooldown()
@@ -263,7 +261,6 @@ class Music(commands.Cog):
         name="presence",
         description="decide bot behaviour when queue is empty",
         guild_only=True,
-        default_permissions=_DEFAULT_PERMISSIONS,
     )
 
     @_presence_group.command(
@@ -292,7 +289,6 @@ class Music(commands.Cog):
         name="search",
         description="select search mode",
         guild_only=True,
-        default_permissions=_DEFAULT_PERMISSIONS,
     )
 
     @_search_group.command(
@@ -321,7 +317,6 @@ class Music(commands.Cog):
         name="channel",
         description="manage text channel to send commands",
         guild_only=True,
-        default_permissions=_DEFAULT_PERMISSIONS,
     )
 
     @_channel_group.command(
