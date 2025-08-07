@@ -415,8 +415,9 @@ class Music(commands.Cog):
 
         embed = Embed(
             title="Exclusive text channel was changed",
-            description=f"From now on, commands `play`, `queue` and `shuffle` will only be accepted in <#{channel.id}>",
+            description=f"From now on, commands will only be accepted in <#{channel.id}>",
         )
+        embed.set_footer(text="Commands: play, pause, resume, skip, queue and shuffle")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def cog_app_command_error(
