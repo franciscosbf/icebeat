@@ -252,7 +252,7 @@ class Music(commands.Cog):
         _ = interaction
         pass  # TODO: implement
 
-    @app_commands.command(description="enables or disables shuffle mode")
+    @app_commands.command(description="change volume")
     @app_commands.describe(level="volume level (the higher, the worst)")
     @app_commands.guild_only()
     @_is_whitelisted()
