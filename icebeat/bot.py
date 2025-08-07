@@ -32,7 +32,7 @@ __log__ = logging.getLogger(__name__)
 
 
 class IceBeat(commands.Bot):
-    __slots__ = ("store", "lavalink")
+    __slots__ = ("store", "lavalink_client")
 
     def __init__(
         self,
