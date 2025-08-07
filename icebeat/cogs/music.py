@@ -360,32 +360,32 @@ class Music(commands.Cog):
         guild_only=True,
     )
 
-    @_channel_group.command(
-        name="status", description="current state of exclusive text channel mode"
-    )
-    @_is_whitelisted()
-    @_is_guild_owner()
-    @_bot_has_permissions()
-    @_cooldown()
-    async def channel_status(self, interaction: Interaction) -> None:
-        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
-
-        guild = await self._bot.store.get_guild(guild_id)  # pyright: ignore[reportArgumentType]
-
-        state = "enabled" if guild.text_channel else "disabled"
-        text_channel = "not set"
-        if guild.text_channel_id:
-            if not interaction.guild.get_channel(guild.text_channel_id):  # pyright: ignore[reportOptionalMemberAccess]
-                await self._bot.store.unset_guild_text_channel_id(guild_id)
-            else:
-                text_channel = f"<#{guild.text_channel_id}>"
-        embed = Embed(
-            title="Exclusive Text Channel State:",
-            color=Color.green(),
-        )
-        embed.add_field(name="State", value=f"_{state}_")
-        embed.add_field(name="Text Channel", value=text_channel)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+    # @_channel_group.command(
+    #     name="status", description="current state of exclusive text channel mode"
+    # )
+    # @_is_whitelisted()
+    # @_is_guild_owner()
+    # @_bot_has_permissions()
+    # @_cooldown()
+    # async def channel_status(self, interaction: Interaction) -> None:
+    #     guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+    #
+    #     guild = await self._bot.store.get_guild(guild_id)  # pyright: ignore[reportArgumentType]
+    #
+    #     state = "enabled" if guild.text_channel else "disabled"
+    #     text_channel = "not set"
+    #     if guild.text_channel_id:
+    #         if not interaction.guild.get_channel(guild.text_channel_id):  # pyright: ignore[reportOptionalMemberAccess]
+    #             await self._bot.store.unset_guild_text_channel_id(guild_id)
+    #         else:
+    #             text_channel = f"<#{guild.text_channel_id}>"
+    #     embed = Embed(
+    #         title="Exclusive Text Channel State:",
+    #         color=Color.green(),
+    #     )
+    #     embed.add_field(name="State", value=f"_{state}_")
+    #     embed.add_field(name="Text Channel", value=text_channel)
+    #     await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @_channel_group.command(
         name="enable", description="enable exclusive text channel mode, if set"
@@ -464,6 +464,16 @@ class Music(commands.Cog):
         )
         embed.set_footer(text="Commands: play, pause, resume, skip, queue and shuffle")
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(description="displays current player configuration")
+    @app_commands.guild_only()
+    @_default_permissions()
+    @_is_whitelisted()
+    @_bot_has_permissions()
+    @_cooldown()
+    async def info(self, interaction: Interaction) -> None:
+        # send ephemeral message
+        pass  # TODO: implement
 
     async def cog_app_command_error(
         self, interaction: Interaction, error: app_commands.AppCommandError
