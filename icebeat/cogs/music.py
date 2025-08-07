@@ -29,7 +29,10 @@ __all__ = ["Music"]
 __log__ = logging.getLogger(__name__)
 
 
-_DEFAULT_PERMISSIONS = Permissions(connect=True, speak=True)
+_DEFAULT_PERMISSIONS = Permissions(
+    connect=True,
+    speak=True,
+)
 
 
 def _default_permissions() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
@@ -100,6 +103,14 @@ def _has_text_channel_set() -> Callable[[app_commands.checks.T], app_commands.ch
         return True
 
     return app_commands.check(predicate)
+
+
+def _bot_has_permissions() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
+    return app_commands.checks.bot_has_permissions(
+        connect=True,
+        speak=True,
+        send_messages=True,
+    )
 
 
 class _LavalinkVoiceClient(VoiceProtocol):
@@ -180,6 +191,7 @@ class Music(commands.Cog):
     @_default_permissions()
     @_is_whitelisted()
     @_has_text_channel_set()
+    @_bot_has_permissions()
     @_cooldown()
     async def play(self, interaction: Interaction, query: str) -> None:
         _, _ = interaction, query
@@ -190,6 +202,7 @@ class Music(commands.Cog):
     @_default_permissions()
     @_is_whitelisted()
     @_has_text_channel_set()
+    @_bot_has_permissions()
     @_cooldown()
     async def pause(self, interaction: Interaction) -> None:
         _ = interaction
@@ -200,6 +213,7 @@ class Music(commands.Cog):
     @_default_permissions()
     @_is_whitelisted()
     @_has_text_channel_set()
+    @_bot_has_permissions()
     @_cooldown()
     async def resume(self, interaction: Interaction) -> None:
         _ = interaction
@@ -210,6 +224,7 @@ class Music(commands.Cog):
     @_default_permissions()
     @_is_whitelisted()
     @_has_text_channel_set()
+    @_bot_has_permissions()
     @_cooldown()
     async def skip(self, interaction: Interaction) -> None:
         _ = interaction
@@ -220,6 +235,7 @@ class Music(commands.Cog):
     @_default_permissions()
     @_is_whitelisted()
     @_has_text_channel_set()
+    @_bot_has_permissions()
     @_cooldown()
     async def queue(self, interaction: Interaction) -> None:
         _ = interaction
@@ -230,6 +246,7 @@ class Music(commands.Cog):
     @_default_permissions()
     @_is_whitelisted()
     @_has_text_channel_set()
+    @_bot_has_permissions()
     @_cooldown()
     async def shuffle(self, interaction: Interaction) -> None:
         _ = interaction
@@ -240,6 +257,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_is_whitelisted()
     @_is_guild_owner()
+    @_bot_has_permissions()
     @_cooldown()
     async def volume(
         self, interaction: Interaction, level: app_commands.Range[int, 0, 1000]
@@ -252,6 +270,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_is_whitelisted()
     @_is_guild_owner()
+    @_bot_has_permissions()
     @_cooldown()
     async def filter(self, interaction: Interaction, name: Filter) -> None:
         _, _ = interaction, name
@@ -269,6 +288,7 @@ class Music(commands.Cog):
     )
     @_is_whitelisted()
     @_is_guild_owner()
+    @_bot_has_permissions()
     @_cooldown()
     async def presence_stay(self, interaction: Interaction) -> None:
         _ = interaction
@@ -280,6 +300,7 @@ class Music(commands.Cog):
     )
     @_is_whitelisted()
     @_is_guild_owner()
+    @_bot_has_permissions()
     @_cooldown()
     async def presence_leave(self, interaction: Interaction) -> None:
         _ = interaction
@@ -297,6 +318,7 @@ class Music(commands.Cog):
     )
     @_is_whitelisted()
     @_is_guild_owner()
+    @_bot_has_permissions()
     @_cooldown()
     async def search_auto(self, interaction: Interaction) -> None:
         _ = interaction
@@ -308,6 +330,7 @@ class Music(commands.Cog):
     )
     @_is_whitelisted()
     @_is_guild_owner()
+    @_bot_has_permissions()
     @_cooldown()
     async def search_select(self, interaction: Interaction) -> None:
         _ = interaction
@@ -324,6 +347,7 @@ class Music(commands.Cog):
     )
     @_is_whitelisted()
     @_is_guild_owner()
+    @_bot_has_permissions()
     @_cooldown()
     async def channel_status(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
@@ -350,6 +374,7 @@ class Music(commands.Cog):
     )
     @_is_whitelisted()
     @_is_guild_owner()
+    @_bot_has_permissions()
     @_cooldown()
     async def channel_enable(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
@@ -380,6 +405,7 @@ class Music(commands.Cog):
     )
     @_is_whitelisted()
     @_is_guild_owner()
+    @_bot_has_permissions()
     @_cooldown()
     async def channel_disable(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
@@ -406,6 +432,7 @@ class Music(commands.Cog):
     @app_commands.describe(channel="text channel")
     @_is_whitelisted()
     @_is_guild_owner()
+    @_bot_has_permissions()
     @_cooldown()
     async def channel_set(self, interaction: Interaction, channel: TextChannel) -> None:
         await self._bot.store.set_guild_text_channel_id(
@@ -443,6 +470,23 @@ class Music(commands.Cog):
             embed = Embed(
                 title="Exclusive text channel is enabled but not set",
                 description="Please contact the server owner",
+                color=Color.yellow(),
+            )
+        elif isinstance(error, app_commands.BotMissingPermissions):
+            perms = [
+                f"_{perm.replace('_', ' ').replace('guild', 'server')}_"
+                for perm in error.missing_permissions
+            ]
+            nperms = len(perms)
+            if nperms == 1:
+                fmted_perms = perms[0]
+            elif nperms == 2:
+                fmted_perms = f"{perms[0]} and {perms[1]}"
+            else:
+                fmted_perms = f"{', '.join(perms[:-1])} and {perms[-1]}"
+            embed = Embed(
+                title="I lack some capabilities",
+                description=f"**Missing permissions:** {fmted_perms}",
                 color=Color.yellow(),
             )
         elif isinstance(error, app_commands.CommandOnCooldown):
