@@ -163,7 +163,9 @@ class SQLiteStorage(Storage):
             {"id": guild_id, "auto_leave": int(auto_leave)},
         )
 
-    async def set_optional_search(self, guild_id: int, optional_search: bool) -> None:
+    async def set_guild_optional_search(
+        self, guild_id: int, optional_search: bool
+    ) -> None:
         await self._connection.execute_auto_closable_commited(
             """
             INSERT INTO guilds (id, auto_leave)
