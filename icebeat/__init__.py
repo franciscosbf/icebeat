@@ -20,6 +20,8 @@ async def _launch(conf: config.Config) -> None:
         storage = SQLiteStorage(sqlite_conn)
         store = Store(cache, storage)
 
+        await store.prepare()
+
         async with IceBeat(store) as bot:
             await bot.login(conf.bot.token)
 
