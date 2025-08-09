@@ -61,7 +61,7 @@ class Storage(ABC):
     async def set_guild_auto_leave(self, guild_id: int, auto_leave: bool) -> None: ...
 
     @abstractmethod
-    async def set_optional_search(
+    async def set_guild_optional_search(
         self, guild_id: int, optional_search: bool
     ) -> None: ...
 
@@ -126,6 +126,13 @@ class Store:
 
     async def set_guild_auto_leave(self, guild_id: int, *, auto_leave: bool) -> None:
         await self._storage.set_guild_auto_leave(guild_id, auto_leave)
+
+        self._cache.invalidate_guild(guild_id)
+
+    async def set_guild_optional_search(
+        self, guild_id: int, *, optional_search: bool
+    ) -> None:
+        await self._storage.set_guild_optional_search(guild_id, optional_search)
 
         self._cache.invalidate_guild(guild_id)
 

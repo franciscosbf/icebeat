@@ -348,20 +348,46 @@ class Music(commands.Cog):
     @_bot_has_permissions()
     @_cooldown()
     async def search_auto(self, interaction: Interaction) -> None:
-        _ = interaction
-        pass  # TODO: implement
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        guild = await self._bot.store.get_guild(guild_id)
+        if not guild.optional_search:
+            embed = Embed(title="Auto search is already enabled", color=Color.green())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        await self._bot.store.set_guild_optional_search(
+            guild_id,  # pyright: ignore[reportArgumentType]
+            optional_search=False,
+        )
+
+        embed = Embed(title="Auto search has been set", color=Color.green())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @_search_group.command(
         name="select",
-        description="if a normal search is provided, you will be able to select between multiple results",
+        description="if a normal search is provided, the user will be able to select between multiple results",
     )
     @_is_whitelisted()
     @_is_guild_owner()
     @_bot_has_permissions()
     @_cooldown()
     async def search_select(self, interaction: Interaction) -> None:
-        _ = interaction
-        pass  # TODO: implement
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        guild = await self._bot.store.get_guild(guild_id)
+        if guild.optional_search:
+            embed = Embed(title="Auto search is already disabled", color=Color.green())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        await self._bot.store.set_guild_optional_search(
+            guild_id,  # pyright: ignore[reportArgumentType]
+            optional_search=True,
+        )
+
+        embed = Embed(title="User-defined search has been set", color=Color.green())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     _channel_group = app_commands.Group(
         name="channel",
