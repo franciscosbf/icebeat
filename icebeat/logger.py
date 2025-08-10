@@ -27,7 +27,7 @@ def setup_logger(verbose: bool, debug: bool) -> None:
     handler.addFilter(_LogFilter(verbose))
     handler.setFormatter(
         colorlog.ColoredFormatter(
-            "[%(asctime)s] [%(name)-24s] [%(log_color)s%(levelname)-8s%(reset)s] %(message)s"
+            "[%(asctime)s] [%(name)] [%(log_color)s%(levelname)-8s%(reset)s] %(message)s"
         )
     )
 
