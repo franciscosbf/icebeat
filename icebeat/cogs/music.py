@@ -382,6 +382,7 @@ class Music(commands.Cog):
         name="presence",
         description="decide bot behaviour when queue is empty",
         guild_only=True,
+        default_permissions=_DEFAULT_PERMISSIONS,
     )
 
     @_presence_group.command(
@@ -426,6 +427,7 @@ class Music(commands.Cog):
         name="search",
         description="select search mode",
         guild_only=True,
+        default_permissions=_DEFAULT_PERMISSIONS,
     )
 
     @_search_group.command(
@@ -466,6 +468,7 @@ class Music(commands.Cog):
         name="channel",
         description="manage text channel to send commands",
         guild_only=True,
+        default_permissions=_DEFAULT_PERMISSIONS,
     )
 
     @_channel_group.command(
