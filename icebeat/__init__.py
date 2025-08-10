@@ -22,10 +22,7 @@ async def _launch(conf: config.Config) -> None:
         await store.prepare()
 
         async with IceBeat(store, conf) as bot:
-            try:
-                await bot.start(conf.bot.token)
-            finally:
-                await bot.unload_cogs()
+            await bot.start(conf.bot.token)
 
 
 def main() -> None:

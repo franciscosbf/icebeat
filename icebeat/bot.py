@@ -1,5 +1,6 @@
 import logging
-from typing import Any
+from types import TracebackType
+from typing import Any, Optional, Type
 
 from discord import (
     AllowedMentions,
@@ -65,6 +66,10 @@ class IceBeat(commands.Bot):
                     f"Server {guild_id} was removed from whitelist as I couldn't find it"
                 )
 
+    async def _unload_cogs(self) -> None:
+        for cog_name in list(self.cogs.keys()):
+            await self.remove_cog(cog_name)
+
     async def setup_hook(self) -> None:
         await self.add_cog(Owner(self))
 
@@ -121,6 +126,12 @@ class IceBeat(commands.Bot):
         for command in await self.tree.fetch_commands(guild=guild):
             await self.http.delete_guild_command(self.client.id, guild.id, command.id)  # pyright: ignore[reportAttributeAccessIssue]
 
-    async def unload_cogs(self) -> None:
-        for cog_name in list(self.cogs.keys()):
-            await self.remove_cog(cog_name)
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        await super().__aexit__(exc_type, exc_value, traceback)
+
+        await self._unload_cogs()
