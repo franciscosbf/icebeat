@@ -33,6 +33,7 @@ __log__ = logging.getLogger(__name__)
 _URL_RE = re.compile(r"^http?://(?:www\.)?.+")
 _DEFAULT_PERMISSIONS = Permissions(
     connect=True,
+    use_application_commands=True,
 )
 
 
