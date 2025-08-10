@@ -122,6 +122,5 @@ class IceBeat(commands.Bot):
             await self.http.delete_guild_command(self.client.id, guild.id, command.id)  # pyright: ignore[reportAttributeAccessIssue]
 
     async def unload_cogs(self) -> None:
-        cog_names = list(self.cogs.keys())
-        for cog_name in cog_names:
+        for cog_name in list(self.cogs.keys()):
             await self.remove_cog(cog_name)
