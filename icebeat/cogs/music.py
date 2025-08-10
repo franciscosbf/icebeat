@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import TYPE_CHECKING, Callable
 
 from discord import (
@@ -29,9 +30,9 @@ __all__ = ["Music"]
 __log__ = logging.getLogger(__name__)
 
 
+_URL_RE = re.compile(r"^http?://(?:www\.)?.+")
 _DEFAULT_PERMISSIONS = Permissions(
     connect=True,
-    speak=True,
 )
 
 
