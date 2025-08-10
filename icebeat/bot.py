@@ -12,7 +12,8 @@ from discord import (
 )
 import discord
 from discord.ext import commands
-import lavalink
+
+from icebeat.config import Config
 
 from .store import Store
 from .cogs import Owner, Music
@@ -37,6 +38,7 @@ class IceBeat(commands.Bot):
     def __init__(
         self,
         store: Store,
+        conf: Config,
     ) -> None:
         super().__init__(
             command_prefix=_PREFIX,
@@ -50,6 +52,7 @@ class IceBeat(commands.Bot):
         )
 
         self.store = store
+        self.conf = conf
 
     async def _verify_whitelisted_guilds(self) -> None:
         for guild_id in (await self.store.get_whitelist()).guild_ids:
@@ -105,11 +108,6 @@ class IceBeat(commands.Bot):
     ) -> None:
         _, _ = ctx, error
 
-    async def run_forever(self, lavalink_client: lavalink.Client) -> None:
-        self.lavalink_client = lavalink_client
-
-        await self.connect(reconnect=True)
-
     async def add_app_commands_to_guild(self, guild: Guild) -> None:
         for cog in self.cogs.values():
             for command in cog.get_app_commands():
@@ -122,3 +120,8 @@ class IceBeat(commands.Bot):
 
         for command in await self.tree.fetch_commands(guild=guild):
             await self.http.delete_guild_command(self.client.id, guild.id, command.id)  # pyright: ignore[reportAttributeAccessIssue]
+
+    async def unload_cogs(self) -> None:
+        cog_names = list(self.cogs.keys())
+        for cog_name in cog_names:
+            await self.remove_cog(cog_name)

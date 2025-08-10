@@ -18,6 +18,7 @@ class Bot(_Section):
 
 @dataclass
 class Lavalink(_Section):
+    name: str
     host: str
     port: int
     password: str

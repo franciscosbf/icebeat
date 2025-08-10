@@ -4,7 +4,6 @@ import aiosqlite
 
 
 from .logger import setup_logger
-from .lavalink import LavalinkClient
 from .cache import TimedCache
 from .storage import SQLiteStorage
 from .store import Store
@@ -22,18 +21,11 @@ async def _launch(conf: config.Config) -> None:
 
         await store.prepare()
 
-        async with IceBeat(store) as bot:
-            await bot.login(conf.bot.token)
-
-            async with LavalinkClient(bot.user.id) as lavalink_client:  # pyright: ignore reportOptionalMemberAccess
-                lavalink_client.add_node(
-                    conf.lavalink.host,
-                    conf.lavalink.port,
-                    conf.lavalink.password,
-                    conf.lavalink.region,
-                )
-
-                await bot.run_forever(lavalink_client)
+        async with IceBeat(store, conf) as bot:
+            try:
+                await bot.start(conf.bot.token)
+            finally:
+                await bot.unload_cogs()
 
 
 def main() -> None:

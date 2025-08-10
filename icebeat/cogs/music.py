@@ -114,12 +114,12 @@ def _bot_has_permissions() -> Callable[[app_commands.checks.T], app_commands.che
 
 
 class _LavalinkVoiceClient(VoiceProtocol):
-    __slots__ = ("_lavalink", "_destroyed", "_guild")
+    __slots__ = ("_lavalink_client", "_destroyed", "_guild")
 
     def __init__(self, client: Client, channel: VoiceChannel) -> None:
         super().__init__(client, channel)
 
-        self._lavalink: lavalink.Client = self.client.lavalink  # pyright: ignore[reportAttributeAccessIssue]
+        self._lavalink_client: lavalink.Client = self.client.lavalink_client  # pyright: ignore[reportAttributeAccessIssue]
         self._destroyed = False
         self._guild = self.channel.guild
 
@@ -131,7 +131,7 @@ class _LavalinkVoiceClient(VoiceProtocol):
         self._destroyed = True
 
         try:
-            await self._lavalink.player_manager.destroy(self._guild.id)
+            await self._lavalink_client.player_manager.destroy(self._guild.id)
         except lavalink.errors.ClientError:
             pass
 
@@ -146,11 +146,11 @@ class _LavalinkVoiceClient(VoiceProtocol):
         self.channel: VoiceChannel = self.client.get_channel(channel_id)  # pyright: ignore[reportAttributeAccessIssue, reportIncompatibleVariableOverride]
 
         payload = {"t": "VOICE_STATE_UPDATE", "d": data}
-        await self._lavalink.voice_update_handler(payload)
+        await self._lavalink_client.voice_update_handler(payload)
 
     async def on_voice_server_update(self, data: VoiceServerUpdatePayload) -> None:
         payload = {"t": "VOICE_SERVER_UPDATE", "d": data}
-        await self._lavalink.voice_update_handler(payload)
+        await self._lavalink_client.voice_update_handler(payload)
 
     async def connect(
         self,
@@ -162,13 +162,13 @@ class _LavalinkVoiceClient(VoiceProtocol):
     ) -> None:
         _, _ = timeout, reconnect
 
-        self._lavalink.player_manager.create(guild_id=self._guild.id)
+        self._lavalink_client.player_manager.create(guild_id=self._guild.id)
         await self._guild.change_voice_state(
             channel=self.channel, self_mute=self_mute, self_deaf=self_deaf
         )
 
     async def disconnect(self, *, force: bool) -> None:
-        player = self._lavalink.player_manager.get(self._guild.id)
+        player = self._lavalink_client.player_manager.get(self._guild.id)
 
         if not force and not player.is_connected:  # pyright: ignore[reportOptionalMemberAccess]
             return
@@ -180,10 +180,101 @@ class _LavalinkVoiceClient(VoiceProtocol):
 
 
 class Music(commands.Cog):
-    __slots__ = ("_bot",)
+    __slots__ = ("_bot", "_lavalink_client")
 
     def __init__(self, bot: "IceBeat") -> None:
         self._bot = bot
+
+        self._lavalink_client = self.setup_lavalink()
+        self._bot.lavalink_client = self._lavalink_client
+
+    def setup_lavalink(self) -> lavalink.Client:
+        lavalink_client = lavalink.Client(self._bot.user.id)  # pyright: ignore reportOptionalMemberAccess
+
+        lavalink_client.add_event_hooks(self)
+
+        conf = self._bot.conf
+        lavalink_client.add_node(
+            conf.lavalink.host,
+            conf.lavalink.port,
+            conf.lavalink.password,
+            conf.lavalink.region,
+            conf.lavalink.name,
+        )
+
+        return lavalink_client
+
+    async def cog_unload(self) -> None:
+        await self._lavalink_client.close()
+
+    async def _decide_bot_presence(self, guild_id: int) -> None:
+        guild = self._bot.get_guild(guild_id)
+        if not guild:
+            return
+
+        if (await self._bot.store.get_guild(guild_id)).auto_leave:
+            await guild.voice_client.disconnect(force=True)  # pyright: ignore[reportOptionalMemberAccess]
+
+    @lavalink.listener(lavalink.TrackStuckEvent)
+    async def on_track_stuck(self, event: lavalink.TrackStuckEvent) -> None:
+        __log__.debug(
+            "Track %s got stuck in guild %d player",
+            event.track.source_name,
+            event.player.guild_id,
+        )
+
+    @lavalink.listener(lavalink.TrackExceptionEvent)
+    async def on_track_exception(self, event: lavalink.TrackExceptionEvent) -> None:
+        __log__.debug(
+            "Track %s raised playback error on guild %d: %s",
+            event.track.source_name,
+            event.player.guild_id,
+            event.cause,
+        )
+
+    @lavalink.listener(lavalink.TrackLoadFailedEvent)
+    async def on_track_load_failed(self, event: lavalink.TrackLoadFailedEvent) -> None:
+        __log__.debug(
+            "Player has failed to load track %s in guild %d: ",
+            event.track.source_name,
+            event.player.guild_id,
+            event.original or "track not playable",
+        )
+
+        player: lavalink.DefaultPlayer = event.player  # pyright: ignore[reportAssignmentType]
+        try:
+            await player.play()
+        except lavalink.errors.RequestError:
+            __log__.exception(
+                "Encountered an error when trying to play next enqueued track on guild: %d",
+                player.guild_id,
+            )
+
+            await self._decide_bot_presence(event.player.guild_id)
+
+    @lavalink.listener(lavalink.QueueEndEvent)
+    async def on_queue_end(self, event: lavalink.QueueEndEvent) -> None:
+        await self._decide_bot_presence(event.player.guild_id)
+
+    @lavalink.listener(lavalink.NodeConnectedEvent)
+    async def on_node_connected(self, event: lavalink.NodeConnectedEvent) -> None:
+        __log__.info("Successfully connected to Lavalink node %s", event.node.name)
+
+    @lavalink.listener(lavalink.NodeDisconnectedEvent)
+    async def on_node_disconnected(self, event: lavalink.NodeDisconnectedEvent) -> None:
+        __log__.warning("Lavalink client disconnect from node %s", event.node.name)
+
+    @lavalink.listener(lavalink.NodeReadyEvent)
+    async def on_node_ready(self, event: lavalink.NodeReadyEvent) -> None:
+        __log__.info("Lavalink node %s is ready to serve", event.node.name)
+
+    @lavalink.listener(lavalink.PlayerErrorEvent)
+    async def on_player_error(self, event: lavalink.PlayerErrorEvent) -> None:
+        __log__.exception(
+            "Guild %d player raised exception: %s",
+            event.player.guild_id,
+            event.original,
+        )
 
     @app_commands.command(description="player whatever you want")
     @app_commands.describe(query="link or normal search as if you were on YouTube")
@@ -300,37 +391,33 @@ class Music(commands.Cog):
     @_bot_has_permissions()
     @_cooldown()
     async def presence_stay(self, interaction: Interaction) -> None:
-        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+        await self._bot.store.set_guild_auto_leave(
+            interaction.guild_id,  # pyright: ignore[reportArgumentType]
+            auto_leave=False,
+        )
 
-        guild = await self._bot.store.get_guild(guild_id)
-        embed = Embed(color=Color.green())
-        if not guild.auto_leave:
-            embed.title = "Stay mode is already set"
-        else:
-            await self._bot.store.set_guild_auto_leave(guild_id, auto_leave=False)
-
-            embed.title = "Stay mode has been activated"
+        embed = Embed(title="Stay mode has been activated", color=Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @_presence_group.command(
         name="leave",
-        description="bot will remain in the voice channel if the queue is empty",
+        description="bot won't remain in the voice channel if the queue is empty",
     )
     @_is_whitelisted()
     @_is_guild_owner()
     @_bot_has_permissions()
     @_cooldown()
     async def presence_leave(self, interaction: Interaction) -> None:
-        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+        await self._bot.store.set_guild_auto_leave(
+            interaction.guild_id,  # pyright: ignore[reportArgumentType]
+            auto_leave=True,
+        )
 
-        guild = await self._bot.store.get_guild(guild_id)
-        embed = Embed(color=Color.green())
-        if guild.auto_leave:
-            embed.title = "Leave mode is already set"
-        else:
-            await self._bot.store.set_guild_auto_leave(guild_id, auto_leave=True)
+        voice_client = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess]
+        if voice_client:
+            await voice_client.disconnect(force=True)
 
-            embed.title = "Leave mode has been activated"
+        embed = Embed(title="Leave mode has been activated", color=Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     _search_group = app_commands.Group(
@@ -348,16 +435,8 @@ class Music(commands.Cog):
     @_bot_has_permissions()
     @_cooldown()
     async def search_auto(self, interaction: Interaction) -> None:
-        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
-
-        guild = await self._bot.store.get_guild(guild_id)
-        if not guild.optional_search:
-            embed = Embed(title="Auto search is already enabled", color=Color.green())
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-
         await self._bot.store.set_guild_optional_search(
-            guild_id,  # pyright: ignore[reportArgumentType]
+            interaction.guild_id,  # pyright: ignore[reportArgumentType]
             optional_search=False,
         )
 
@@ -373,16 +452,8 @@ class Music(commands.Cog):
     @_bot_has_permissions()
     @_cooldown()
     async def search_select(self, interaction: Interaction) -> None:
-        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
-
-        guild = await self._bot.store.get_guild(guild_id)
-        if guild.optional_search:
-            embed = Embed(title="Auto search is already disabled", color=Color.green())
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-
         await self._bot.store.set_guild_optional_search(
-            guild_id,  # pyright: ignore[reportArgumentType]
+            interaction.guild_id,  # pyright: ignore[reportArgumentType]
             optional_search=True,
         )
 
@@ -404,14 +475,6 @@ class Music(commands.Cog):
     @_cooldown()
     async def channel_enable(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
-
-        guild = await self._bot.store.get_guild(guild_id)
-        if guild.text_channel:
-            embed = Embed(
-                title="Exclusive text channel is already enabled", color=Color.green()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
 
         await self._bot.store.set_guild_text_channel(
             guild_id,
@@ -436,16 +499,8 @@ class Music(commands.Cog):
     async def channel_disable(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
-        guild = await self._bot.store.get_guild(guild_id)
-        if not guild.text_channel:
-            embed = Embed(
-                title="Exclusive text channel is already disabled", color=Color.green()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-
         await self._bot.store.set_guild_text_channel(
-            guild_id,  # pyright: ignore[reportArgumentType]
+            guild_id,
             text_channel=False,
         )
 
