@@ -61,7 +61,7 @@ class SQLiteStorage(Storage):
     async def get_guild(self, guild_id: int) -> Guild:
         async with self._connection.execute(
             """
-            SELECT text_channel, text_channel_id, filter, volume, auto_leave, optional_search
+            SELECT filter, volume, auto_leave, shuffle
             FROM guilds
             WHERE id = ?
         """,
@@ -71,12 +71,10 @@ class SQLiteStorage(Storage):
 
         return Guild(
             id=guild_id,
-            text_channel=bool(row[0]),
-            text_channel_id=row[1],
-            filter=Filter(row[2]),
-            volume=row[3],
-            auto_leave=bool(row[4]),
-            optional_search=bool(row[5]),
+            filter=Filter(row[0]),
+            volume=row[1],
+            auto_leave=bool(row[2]),
+            shuffle=bool(row[3]),
         )
 
     async def create_guild(self, guild_id: int) -> Guild:
@@ -163,18 +161,20 @@ class SQLiteStorage(Storage):
             {"id": guild_id, "auto_leave": int(auto_leave)},
         )
 
-    async def set_guild_optional_search(
-        self, guild_id: int, optional_search: bool
-    ) -> None:
-        await self._connection.execute_auto_closable_commited(
+    async def switch_guild_shuffle(self, guild_id: int) -> bool:
+        async with self._connection.execute(
             """
-            INSERT INTO guilds (id, auto_leave)
-            VALUES (:id, :auto_leave)
+            INSERT INTO guilds (id)
+            VALUES (?)
             ON CONFLICT (id)
-            DO UPDATE SET optional_search = :optional_search
+            DO UPDATE SET shuffle = NOT shuffle
+            RETURNING shuffle
         """,
-            {"id": guild_id, "optional_search": int(optional_search)},
-        )
+            (guild_id,),
+        ) as cursor:
+            row: Row = await cursor.fetchone()  # pyright: ignore
+
+        return bool(row[0])
 
     async def get_whitelist(self) -> Whitelist:
         async with self._connection.execute("""

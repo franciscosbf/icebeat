@@ -39,19 +39,6 @@ class Storage(ABC):
     async def create_guild(self, guild_id: int) -> Guild: ...
 
     @abstractmethod
-    async def set_guild_text_channel(
-        self, guild_id: int, text_channel: bool
-    ) -> None: ...
-
-    @abstractmethod
-    async def set_guild_text_channel_id(
-        self, guild_id: int, text_channel_id: int
-    ) -> None: ...
-
-    @abstractmethod
-    async def unset_guild_text_channel_id(self, guild_id: int) -> None: ...
-
-    @abstractmethod
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None: ...
 
     @abstractmethod
@@ -61,9 +48,7 @@ class Storage(ABC):
     async def set_guild_auto_leave(self, guild_id: int, auto_leave: bool) -> None: ...
 
     @abstractmethod
-    async def set_guild_optional_search(
-        self, guild_id: int, optional_search: bool
-    ) -> None: ...
+    async def switch_guild_shuffle(self, guild_id: int) -> bool: ...
 
     @abstractmethod
     async def get_whitelist(self) -> Whitelist: ...
@@ -95,25 +80,6 @@ class Store:
     async def create_guild(self, guild_id: int) -> None:
         await self.get_guild(guild_id)
 
-    async def set_guild_text_channel(
-        self, guild_id: int, *, text_channel: bool
-    ) -> None:
-        await self._storage.set_guild_text_channel(guild_id, text_channel)
-
-        self._cache.invalidate_guild(guild_id)
-
-    async def set_guild_text_channel_id(
-        self, guild_id: int, text_channel_id: int
-    ) -> None:
-        await self._storage.set_guild_text_channel_id(guild_id, text_channel_id)
-
-        self._cache.invalidate_guild(guild_id)
-
-    async def unset_guild_text_channel_id(self, guild_id: int) -> None:
-        await self._storage.unset_guild_text_channel_id(guild_id)
-
-        self._cache.invalidate_guild(guild_id)
-
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None:
         await self._storage.set_guild_filter(guild_id, filter)
 
@@ -129,12 +95,12 @@ class Store:
 
         self._cache.invalidate_guild(guild_id)
 
-    async def set_guild_optional_search(
-        self, guild_id: int, *, optional_search: bool
-    ) -> None:
-        await self._storage.set_guild_optional_search(guild_id, optional_search)
+    async def switch_guild_shuffle(self, guild_id: int) -> bool:
+        shuffle = await self._storage.switch_guild_shuffle(guild_id)
 
         self._cache.invalidate_guild(guild_id)
+
+        return shuffle
 
     async def get_whitelist(self) -> Whitelist:
         whitelist = self._cache.get_whitelist()

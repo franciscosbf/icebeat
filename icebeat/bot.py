@@ -13,6 +13,7 @@ from discord import (
 )
 import discord
 from discord.ext import commands
+import lavalink
 
 from icebeat.config import Config
 
@@ -54,6 +55,8 @@ class IceBeat(commands.Bot):
 
         self.store = store
         self.conf = conf
+
+        self.lavalink_client: lavalink.Client = None  # pyright: ignore[reportAttributeAccessIssue]
 
     async def _verify_whitelisted_guilds(self) -> None:
         for guild_id in (await self.store.get_whitelist()).guild_ids:
