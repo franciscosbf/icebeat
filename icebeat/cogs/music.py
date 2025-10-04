@@ -43,6 +43,23 @@ _DEFAULT_PERMISSIONS = Permissions(
     use_application_commands=True,
 )
 _PLAYER_BAR_SIZE = 20
+_MAX_QUEUE_SIZE = 200
+_ORDINAL_SUFFIX = (
+    "th",
+    "st",
+    "nd",
+    "rd",
+    "th",
+    "th",
+    "th",
+    "th",
+    "th",
+    "th",
+    "th",
+    "th",
+    "th",
+    "th",
+)
 
 
 def _default_permissions() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
@@ -297,6 +314,13 @@ def _is_playing() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
     return app_commands.check(predicate)
 
 
+def _to_ordinal(value: int) -> str:
+    r = value % 100
+    suffix = _ORDINAL_SUFFIX[r] if r <= 13 else _ORDINAL_SUFFIX[value % 10]
+
+    return f"{value}{suffix}"
+
+
 class Music(commands.Cog):
     __slots__ = ("_bot", "_lavalink_client")
 
@@ -423,9 +447,16 @@ class Music(commands.Cog):
     @_ensure_player_is_ready()
     @_cooldown()
     async def play(self, interaction: Interaction, query: str) -> None:
-        await interaction.response.defer(ephemeral=True, thinking=True)
-
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+
+        free_queue_slots = _MAX_QUEUE_SIZE - len(player.queue)
+        if free_queue_slots == 0:
+            embed = Embed(title="Queue is full", color=Color.green())
+            embed.set_footer(text=f"queue only supports up to {_MAX_QUEUE_SIZE} tracks")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
 
         if not _URL_RE.match(query):
             query = _QUERY_SEARCH_FMT.format(query)
@@ -446,11 +477,12 @@ class Music(commands.Cog):
         else:
             raise _LavalinkFailedToGetTracks(result.error)  # pyright: ignore[reportArgumentType]
 
-        for track in tracks:
-            player.add(track, requester=interaction.user.id)
+        n_retrieved_tracks = len(tracks)
+        n_enqueued_tracks = min(free_queue_slots, n_retrieved_tracks)
+        for i in range(n_enqueued_tracks):
+            player.add(tracks[i], requester=interaction.user.id)
 
-        ntracks = len(tracks)
-        if ntracks == 1 and result.load_type != lavalink.LoadType.PLAYLIST:
+        if len(tracks) == 1 and result.load_type != lavalink.LoadType.PLAYLIST:
             duration = _milli_to_human_readable(tracks[0].duration)
             embed = Embed(
                 title="Track enqueued with success",
@@ -459,10 +491,16 @@ class Music(commands.Cog):
             )
         else:
             embed = Embed(
-                title=f"Enqueued {ntracks} track{'s' if ntracks > 1 else ''} with success",
+                title=f"Enqueued {n_enqueued_tracks} track{'s' if free_queue_slots > 1 else ''} with success",
                 description=f"**Playlist: [{result.playlist_info.name}]({query})**",
                 color=Color.green(),
             )
+            if n_enqueued_tracks < n_retrieved_tracks:
+                embed.set_footer(
+                    text=f"Were retrieved {n_retrieved_tracks} track"
+                    f"{'s' if n_retrieved_tracks > 1 else ''} from the playlist, although\n"
+                    f"the queue has reached its full capacity ({_MAX_QUEUE_SIZE} tracks)"
+                )
         await interaction.followup.send(embed=embed, ephemeral=True)
 
         if not player.is_playing:
@@ -481,7 +519,16 @@ class Music(commands.Cog):
         )
 
         query = _QUERY_SEARCH_FMT.format(current)
-        result = await player.node.get_tracks(query)
+        try:
+            result = await player.node.get_tracks(query)
+        except Exception as e:
+            __log__.warning(
+                "Failed to request tracks while autocompleting query argument of play command: %s",
+                e,
+            )
+
+            return []
+
         if result.load_type != lavalink.LoadType.SEARCH:
             return []
 
@@ -530,7 +577,7 @@ class Music(commands.Cog):
             embed = Embed(title="Player is not paused", color=Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="skips what's currently playing")
+    @app_commands.command(description="skips current track")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
@@ -545,6 +592,76 @@ class Music(commands.Cog):
 
         embed = Embed(title="Skipped current track", color=Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(description="jumps to a given enqueued track")
+    @app_commands.describe(position="track position in queue")
+    @app_commands.guild_only()
+    @_default_permissions()
+    @_is_whitelisted()
+    @_bot_has_permissions()
+    @_ensure_player_is_ready()
+    @_is_playing()
+    @_cooldown()
+    async def jump(
+        self,
+        interaction: Interaction,
+        position: app_commands.Range[int, 1, None],
+    ) -> None:
+        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+
+        if not player.queue:
+            embed = Embed(
+                title="Queue is empty",
+                color=Color.green(),
+            )
+        else:
+            queue_size = len(player.queue)
+            ordinal_position = _to_ordinal(position)
+            if position <= queue_size:
+                if position > 1:
+                    player.queue = player.queue[position - 1 :]
+                next_track = player.queue[0]
+
+                await player.skip()
+
+                embed = Embed(
+                    title=f"Trying to jump to the {ordinal_position} track",
+                    description=f"**[{next_track.title}]({next_track.uri})**",
+                    color=Color.green(),
+                )
+            else:
+                embed = Embed(
+                    title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
+                    f"and you tried to jump to the {ordinal_position} track",
+                    color=Color.green(),
+                )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @jump.autocomplete("position")
+    @_is_whitelisted()
+    @_bot_has_permissions()
+    async def jump_position_autocomplete(
+        self, interaction: Interaction, current: str
+    ) -> list[app_commands.Choice[int]]:
+        if not current.isdigit():
+            return []
+
+        player: Optional[lavalink.DefaultPlayer] = self._get_player(interaction)
+        if not player:
+            return []
+
+        position = int(current)
+        if not 1 <= position <= len(player.queue):
+            return []
+
+        ordinal_position = _to_ordinal(position)
+        track = player.queue[position - 1]
+
+        return [
+            app_commands.Choice(
+                name=f"{ordinal_position}: {track.title}", value=position
+            )
+        ]
 
     @app_commands.command(description="seeks to a given position")
     @app_commands.describe(position="track position like in the YouTube video player")
