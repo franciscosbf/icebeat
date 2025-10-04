@@ -43,7 +43,7 @@ _DEFAULT_PERMISSIONS = Permissions(
     use_application_commands=True,
 )
 _PLAYER_BAR_SIZE = 20
-_MAX_QUEUE_SIZE = 200
+_MAX_QUEUE_SIZE = 400
 _ORDINAL_SUFFIX = (
     "th",
     "st",
