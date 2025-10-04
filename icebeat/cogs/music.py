@@ -845,7 +845,7 @@ class Music(commands.Cog):
 
     @_presence_group.command(
         name="stay",
-        description="bot won't leave the voice channel if the queue is empty",
+        description="bot won’t leave the voice channel when the queue's empty",
     )
     @_is_whitelisted()
     @_is_guild_owner()
@@ -862,7 +862,7 @@ class Music(commands.Cog):
 
     @_presence_group.command(
         name="leave",
-        description="bot won't remain in the voice channel if the queue is empty",
+        description="bot will leave the voice channel when the queue's empty",
     )
     @_is_whitelisted()
     @_is_guild_owner()
@@ -880,13 +880,6 @@ class Music(commands.Cog):
 
         embed = Embed(title="Leave mode has been activated", color=Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    _search_group = app_commands.Group(
-        name="search",
-        description="select search mode",
-        guild_only=True,
-        default_permissions=_DEFAULT_PERMISSIONS,
-    )
 
     @app_commands.command(description="displays player info")
     @app_commands.guild_only()
