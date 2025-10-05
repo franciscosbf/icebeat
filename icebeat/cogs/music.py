@@ -752,7 +752,7 @@ class Music(commands.Cog):
             ":white_circle:"
         )
         max_time = _milli_to_human_readable(current_track.duration)
-        player_bar = f"`{current_time}`┃{''.join(adjusted_bar)}┃`{max_time}`"
+        player_bar = f"`{current_time}` ┃{''.join(adjusted_bar)}┃ `{max_time}`"
         embed = Embed(
             title=f"Playing at <#{voice_client.channel.id}>"
             f"{' (paused)' if player.paused else ''}",
