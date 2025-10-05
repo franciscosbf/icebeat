@@ -1,3 +1,4 @@
+from __future__ import print_function
 import logging
 import re
 from typing import TYPE_CHECKING, Callable, Optional
@@ -12,6 +13,7 @@ from discord import (
     Permissions,
     VoiceChannel,
     VoiceProtocol,
+    VoiceState,
     app_commands,
 )
 from discord.abc import Connectable
@@ -370,6 +372,16 @@ class Music(commands.Cog):
 
         return self._bot.lavalink_client.player_manager.get(guild_id)  # pyright: ignore[reportReturnType]
 
+    async def _destroy_player(
+        self, player: lavalink.DefaultPlayer, voice_client: _LavalinkVoiceClient
+    ) -> None:
+        player.queue.clear()
+        await player.stop()
+
+        await voice_client.disconnect(force=True)
+
+        self._bot.lavalink_client.player_manager.remove(player.guild_id)  # pyright: ignore[reportArgumentType]
+
     @lavalink.listener(lavalink.TrackStartEvent)
     async def on_track_start(self, event: lavalink.TrackStartEvent) -> None:
         await self._guild_still_exists(event.player.guild_id)
@@ -437,6 +449,28 @@ class Music(commands.Cog):
             event.player.guild_id,
             event.original,
         )
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(
+        self, member: Member, before: VoiceState, after: VoiceState
+    ) -> None:
+        player: Optional[lavalink.DefaultPlayer] = (
+            self._bot.lavalink_client.player_manager.get(member.guild.id)
+        )
+        if not player:
+            return
+
+        voice_client: Optional[_LavalinkVoiceClient] = member.guild.voice_client  # pyright: ignore[reportAssignmentType]
+        if not voice_client:
+            return
+
+        channel_id = voice_client.channel.id
+        if (before.channel and before.channel.id == channel_id) or (
+            after.channel and after.channel.id == channel_id
+        ):
+            voice_states = voice_client.channel.voice_states
+            if len(voice_states) == 1 and self._bot.user.id in voice_states:  # pyright: ignore[reportOptionalMemberAccess]
+                await self._destroy_player(player, voice_client)
 
     @app_commands.command(description="player whatever you want")
     @app_commands.describe(query="link or normal search as if you were on YouTube")
@@ -654,14 +688,9 @@ class Music(commands.Cog):
         if not 1 <= position <= len(player.queue):
             return []
 
-        ordinal_position = _to_ordinal(position)
         track = player.queue[position - 1]
 
-        return [
-            app_commands.Choice(
-                name=f"{ordinal_position}: {track.title}", value=position
-            )
-        ]
+        return [app_commands.Choice(name=track.title, value=position)]
 
     @app_commands.command(description="seeks to a given position")
     @app_commands.describe(position="track position like in the YouTube video player")
@@ -765,17 +794,11 @@ class Music(commands.Cog):
     async def leave(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
-        player.queue.clear()
-        await player.stop()
-
         voice_client: _LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
-        voice_channel = voice_client.channel
-        await voice_client.disconnect(force=True)
-
-        self._bot.lavalink_client.player_manager.remove(interaction.guild_id)  # pyright: ignore[reportArgumentType]
+        await self._destroy_player(player, voice_client)
 
         embed = Embed(
-            title=f"Bot has been disconnected from <#{voice_channel.id}>",
+            title=f"Bot has been disconnected from <#{voice_client.channel.id}>",
             color=Color.green(),
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -838,7 +861,7 @@ class Music(commands.Cog):
 
     _presence_group = app_commands.Group(
         name="presence",
-        description="decide bot behaviour when queue is empty",
+        description="decide bot behaviour when queue is empty (the bot leaves the voice channel when it's alone)",
         guild_only=True,
         default_permissions=_DEFAULT_PERMISSIONS,
     )
