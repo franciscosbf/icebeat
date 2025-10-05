@@ -372,15 +372,13 @@ class Music(commands.Cog):
 
         return self._bot.lavalink_client.player_manager.get(guild_id)  # pyright: ignore[reportReturnType]
 
-    async def _destroy_player(
+    async def _disconnect_bot(
         self, player: lavalink.DefaultPlayer, voice_client: _LavalinkVoiceClient
     ) -> None:
         player.queue.clear()
         await player.stop()
 
         await voice_client.disconnect(force=True)
-
-        self._bot.lavalink_client.player_manager.remove(player.guild_id)  # pyright: ignore[reportArgumentType]
 
     @lavalink.listener(lavalink.TrackStartEvent)
     async def on_track_start(self, event: lavalink.TrackStartEvent) -> None:
@@ -470,7 +468,7 @@ class Music(commands.Cog):
         ):
             voice_states = voice_client.channel.voice_states
             if len(voice_states) == 1 and self._bot.user.id in voice_states:  # pyright: ignore[reportOptionalMemberAccess]
-                await self._destroy_player(player, voice_client)
+                await self._disconnect_bot(player, voice_client)
 
     @app_commands.command(description="player whatever you want")
     @app_commands.describe(query="link or normal search as if you were on YouTube")
@@ -486,7 +484,7 @@ class Music(commands.Cog):
         free_queue_slots = _MAX_QUEUE_SIZE - len(player.queue)
         if free_queue_slots == 0:
             embed = Embed(title="Queue is full", color=Color.green())
-            embed.set_footer(text=f"queue only supports up to {_MAX_QUEUE_SIZE} tracks")
+            embed.set_footer(text=f"Queue only supports up to {_MAX_QUEUE_SIZE} tracks")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -795,7 +793,7 @@ class Music(commands.Cog):
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         voice_client: _LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
-        await self._destroy_player(player, voice_client)
+        await self._disconnect_bot(player, voice_client)
 
         embed = Embed(
             title=f"Bot has been disconnected from <#{voice_client.channel.id}>",
