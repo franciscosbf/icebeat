@@ -925,10 +925,16 @@ class Music(commands.Cog):
             )
         else:
             player_state = "not connected"
-        embed.add_field(name="Filter", value=guild_db.filter.name)
-        embed.add_field(name="Volume", value=f"{guild_db.volume}")
-        embed.add_field(name="Shuffle Mode", value=shuffle_mode_state, inline=False)
-        embed.add_field(name="Player State", value=player_state)
+        embed.add_field(
+            name="┃ Filter :level_slider:", value=f"- {guild_db.filter.name}"
+        )
+        embed.add_field(name="┃ Volume :sound:", value=f"- {guild_db.volume}")
+        embed.add_field(
+            name="┃ Shuffle Mode :game_die:",
+            value=f"- {shuffle_mode_state}",
+            inline=False,
+        )
+        embed.add_field(name="┃ Player State :notes:", value=f"- {player_state}")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def cog_app_command_error(
