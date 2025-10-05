@@ -470,7 +470,7 @@ class Music(commands.Cog):
             if len(voice_states) == 1 and self._bot.user.id in voice_states:  # pyright: ignore[reportOptionalMemberAccess]
                 await self._disconnect_bot(player, voice_client)
 
-    @app_commands.command(description="player whatever you want")
+    @app_commands.command(description="Request something to play")
     @app_commands.describe(query="link or normal search as if you were on YouTube")
     @app_commands.guild_only()
     @_default_permissions()
@@ -571,7 +571,7 @@ class Music(commands.Cog):
             for i in range(max_searches)
         ]
 
-    @app_commands.command(description="stops the player")
+    @app_commands.command(description="Stops the player")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
@@ -590,7 +590,7 @@ class Music(commands.Cog):
             embed = Embed(title="Player is already paused", color=Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="resumes the player")
+    @app_commands.command(description="Resumes the player")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
@@ -609,7 +609,7 @@ class Music(commands.Cog):
             embed = Embed(title="Player is not paused", color=Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="skips current track")
+    @app_commands.command(description="Skips current track")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
@@ -625,7 +625,7 @@ class Music(commands.Cog):
         embed = Embed(title="Skipped current track", color=Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="jumps to a given enqueued track")
+    @app_commands.command(description="Jumps to a given enqueued track")
     @app_commands.describe(position="track position in queue")
     @app_commands.guild_only()
     @_default_permissions()
@@ -690,7 +690,7 @@ class Music(commands.Cog):
 
         return [app_commands.Choice(name=track.title, value=position)]
 
-    @app_commands.command(description="seeks to a given position")
+    @app_commands.command(description="Seeks to a given position in the track")
     @app_commands.describe(position="track position like in the YouTube video player")
     @app_commands.guild_only()
     @_default_permissions()
@@ -732,7 +732,7 @@ class Music(commands.Cog):
                 )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="displays current track")
+    @app_commands.command(description="Displays current track")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
@@ -768,9 +768,8 @@ class Music(commands.Cog):
             embed.set_footer(text=text)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="displays queued tracks")
+    @app_commands.command(description="Lists queue")
     @app_commands.guild_only()
-    @_default_permissions()
     @_is_whitelisted()
     @_bot_has_permissions()
     @_ensure_player_is_ready()
@@ -782,7 +781,30 @@ class Music(commands.Cog):
             content="Not implemented", ephemeral=True
         )
 
-    @app_commands.command(description="forces me to disconnect from the voice channel")
+    @app_commands.command(description="Removes all queued tracks")
+    @app_commands.guild_only()
+    @_is_whitelisted()
+    @_bot_has_permissions()
+    @_ensure_player_is_ready()
+    @_cooldown()
+    async def wipe(self, interaction: Interaction) -> None:
+        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+
+        if player.queue:
+            player.queue = []
+
+            embed = Embed(
+                title="The queue is now empty",
+                color=Color.green(),
+            )
+        else:
+            embed = Embed(
+                title="There are no queued tracks",
+                color=Color.green(),
+            )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(description="Forces me to disconnect from the voice channel")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
@@ -801,7 +823,7 @@ class Music(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="enables/disables shuffle mode")
+    @app_commands.command(description="Toggle shuffle mode")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
@@ -822,7 +844,7 @@ class Music(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="change volume")
+    @app_commands.command(description="Changes player volume")
     @app_commands.describe(level="volume level (the higher, the worst)")
     @app_commands.guild_only()
     @_is_whitelisted()
@@ -843,7 +865,7 @@ class Music(commands.Cog):
         embed = Embed(title="Volume has been changed", color=Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="sets player filter")
+    @app_commands.command(description="Sets player filter")
     @app_commands.describe(name="filter name")
     @app_commands.guild_only()
     @_is_whitelisted()
@@ -859,14 +881,14 @@ class Music(commands.Cog):
 
     _presence_group = app_commands.Group(
         name="presence",
-        description="decide bot behaviour when queue is empty (the bot leaves the voice channel when it's alone)",
+        description="Decides bot behaviour when queue is empty (the bot leaves the voice channel when it's alone)",
         guild_only=True,
         default_permissions=_DEFAULT_PERMISSIONS,
     )
 
     @_presence_group.command(
         name="stay",
-        description="bot won’t leave the voice channel when the queue's empty",
+        description="Bot won’t leave the voice channel when the queue's empty",
     )
     @_is_whitelisted()
     @_is_guild_owner()
@@ -883,7 +905,7 @@ class Music(commands.Cog):
 
     @_presence_group.command(
         name="leave",
-        description="bot will leave the voice channel when the queue's empty",
+        description="Bot will leave the voice channel when the queue's empty",
     )
     @_is_whitelisted()
     @_is_guild_owner()
@@ -902,7 +924,7 @@ class Music(commands.Cog):
         embed = Embed(title="Leave mode has been activated", color=Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="displays player info")
+    @app_commands.command(description="Displays player info")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
@@ -993,7 +1015,7 @@ class Music(commands.Cog):
             if bot_voice_client := interaction.guild.voice_client:  # pyright: ignore[reportOptionalMemberAccess]
                 bot_voice_channel: VoiceChannel = bot_voice_client.channel  # pyright: ignore[reportAssignmentType]
                 embed.description = (
-                    f"Hop into <#{bot_voice_channel.id}>, I'm here to party."
+                    f"Hop into <#{bot_voice_channel.id}>, I'm here to party"
                 )
         elif isinstance(error, _BotNotInVoiceChannel):
             embed = Embed(
