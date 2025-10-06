@@ -189,10 +189,10 @@ class _LavalinkVoiceClient(VoiceProtocol):
 
 
 class _FailedToRetrievePlayer(app_commands.CheckFailure):
-    __slots__ = ("original",)
+    __slots__ = ("original_error",)
 
-    def __init__(self, original: Exception) -> None:
-        self.original = original
+    def __init__(self, original_error: Exception) -> None:
+        self.original_error = original_error
 
 
 class _MemberNotInVoiceChannel(app_commands.CheckFailure):
@@ -500,22 +500,22 @@ class Music(commands.Cog):
 
         await interaction.response.defer(thinking=True)
 
-        embed = Embed(title="Scouring the basement...", color=Color.green())
-        await interaction.followup.send(embed=embed, wait=True)
-
-        if not _URL_RE.match(query):
-            query = _QUERY_SEARCH_FMT.format(query)
-
-        result = await player.node.get_tracks(query)
+        result = await player.node.get_tracks(
+            query if _URL_RE.match(query) else _QUERY_SEARCH_FMT.format(query)
+        )
         if result.load_type == lavalink.LoadType.EMPTY:
             embed = Embed(title="Couldn't find anything to play", color=Color.green())
             embed.set_footer(text="What kind of voodoo shi you trying to do on me?")
             await interaction.followup.send(embed=embed)
             return
-        elif result.load_type in (
-            lavalink.LoadType.SEARCH,
-            lavalink.LoadType.TRACK,
-        ):
+        elif result.load_type == lavalink.LoadType.SEARCH:
+            for i in range(min(len(result.tracks), _MAX_QUEUE_SIZE)):
+                if result.tracks[i].title == query:
+                    tracks = [result.tracks[i]]
+                    break
+            else:
+                tracks = result.tracks[:1]
+        elif result.load_type == lavalink.LoadType.TRACK:
             tracks = result.tracks[:1]
         elif result.load_type == lavalink.LoadType.PLAYLIST:
             tracks = result.tracks
@@ -1030,7 +1030,7 @@ class Music(commands.Cog):
             )
             embed.set_footer(text="You still have tomorrow")
         elif isinstance(error, _FailedToRetrievePlayer):
-            __log__.warning("Failed to retrieve guild player: %v", error.original)
+            __log__.warning("Failed to retrieve guild player: %v", error.original_error)
 
             embed = Embed(
                 title="My assistant just disapeared...",
