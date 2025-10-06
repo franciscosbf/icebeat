@@ -188,6 +188,13 @@ class _LavalinkVoiceClient(VoiceProtocol):
         await self._destroy()
 
 
+class _FailedToRetrievePlayer(app_commands.CheckFailure):
+    __slots__ = ("original",)
+
+    def __init__(self, original: Exception) -> None:
+        self.original = original
+
+
 class _MemberNotInVoiceChannel(app_commands.CheckFailure):
     pass
 
@@ -214,9 +221,12 @@ def _ensure_player_is_ready() -> Callable[
         bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
-        player: lavalink.DefaultPlayer = bot.lavalink_client.player_manager.create(
-            guild_id
-        )
+        try:
+            player: lavalink.DefaultPlayer = bot.lavalink_client.player_manager.create(
+                guild_id
+            )
+        except Exception as e:
+            raise _FailedToRetrievePlayer(e)
 
         bot_voice_client = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess]
 
@@ -485,10 +495,13 @@ class Music(commands.Cog):
         if free_queue_slots == 0:
             embed = Embed(title="Queue is full", color=Color.green())
             embed.set_footer(text=f"Queue only supports up to {_MAX_QUEUE_SIZE} tracks")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
             return
 
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        await interaction.response.defer(thinking=True)
+
+        embed = Embed(title="Scouring the basement...", color=Color.green())
+        await interaction.followup.send(embed=embed, wait=True)
 
         if not _URL_RE.match(query):
             query = _QUERY_SEARCH_FMT.format(query)
@@ -497,7 +510,7 @@ class Music(commands.Cog):
         if result.load_type == lavalink.LoadType.EMPTY:
             embed = Embed(title="Couldn't find anything to play", color=Color.green())
             embed.set_footer(text="What kind of voodoo shi you trying to do on me?")
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed)
             return
         elif result.load_type in (
             lavalink.LoadType.SEARCH,
@@ -533,7 +546,8 @@ class Music(commands.Cog):
                     f"{'s' if n_retrieved_tracks > 1 else ''} from the playlist, although\n"
                     f"the queue has reached its full capacity ({_MAX_QUEUE_SIZE} tracks)"
                 )
-        await interaction.followup.send(embed=embed, ephemeral=True)
+
+        await interaction.followup.send(embed=embed)
 
         if not player.is_playing:
             await player.play()
@@ -546,9 +560,17 @@ class Music(commands.Cog):
             return []
 
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
-        player: lavalink.DefaultPlayer = (
-            self._bot.lavalink_client.player_manager.create(guild_id)
-        )
+        try:
+            player: lavalink.DefaultPlayer = (
+                self._bot.lavalink_client.player_manager.create(guild_id)
+            )
+        except Exception as e:
+            __log__.warning(
+                "Failed to retrieved guild player: %s",
+                e,
+            )
+
+            return []
 
         query = _QUERY_SEARCH_FMT.format(current)
         try:
@@ -586,9 +608,10 @@ class Music(commands.Cog):
             await player.set_pause(True)
 
             embed = Embed(title="Player has been paused", color=Color.green())
+
         else:
             embed = Embed(title="Player is already paused", color=Color.green())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Resumes the player")
     @app_commands.guild_only()
@@ -605,9 +628,10 @@ class Music(commands.Cog):
             await player.set_pause(False)
 
             embed = Embed(title="Player has been resumed", color=Color.green())
+
         else:
             embed = Embed(title="Player is not paused", color=Color.green())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Skips current track")
     @app_commands.guild_only()
@@ -623,7 +647,7 @@ class Music(commands.Cog):
         await player.skip()
 
         embed = Embed(title="Skipped current track", color=Color.green())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Jumps to a given enqueued track")
     @app_commands.describe(position="track position in queue")
@@ -657,7 +681,7 @@ class Music(commands.Cog):
                 await player.skip()
 
                 embed = Embed(
-                    title=f"Trying to jump to the {ordinal_position} track",
+                    title=f"Jumping to the {ordinal_position} track",
                     description=f"**[{next_track.title}]({next_track.uri})**",
                     color=Color.green(),
                 )
@@ -667,7 +691,7 @@ class Music(commands.Cog):
                     f"and you tried to jump to the {ordinal_position} track",
                     color=Color.green(),
                 )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @jump.autocomplete("position")
     @_is_whitelisted()
@@ -730,7 +754,7 @@ class Music(commands.Cog):
                     title=f"Seeked to position `{position_original}`",
                     color=Color.green(),
                 )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Displays current track")
     @app_commands.guild_only()
@@ -766,7 +790,7 @@ class Music(commands.Cog):
             else:
                 text = f"There's {queue_size} track in queue"
             embed.set_footer(text=text)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Lists queue")
     @app_commands.guild_only()
@@ -777,9 +801,7 @@ class Music(commands.Cog):
     async def queue(self, interaction: Interaction) -> None:
         _ = interaction
         # TODO: implement
-        await interaction.response.send_message(
-            content="Not implemented", ephemeral=True
-        )
+        await interaction.response.send_message(content="Not implemented")
 
     @app_commands.command(description="Removes all queued tracks")
     @app_commands.guild_only()
@@ -797,12 +819,13 @@ class Music(commands.Cog):
                 title="The queue is now empty",
                 color=Color.green(),
             )
+
         else:
             embed = Embed(
                 title="There are no queued tracks",
                 color=Color.green(),
             )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Forces me to disconnect from the voice channel")
     @app_commands.guild_only()
@@ -821,12 +844,13 @@ class Music(commands.Cog):
             title=f"Bot has been disconnected from <#{voice_client.channel.id}>",
             color=Color.green(),
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Toggle shuffle mode")
     @app_commands.guild_only()
     @_default_permissions()
     @_is_whitelisted()
+    @_is_guild_owner()
     @_bot_has_permissions()
     @_cooldown()
     async def shuffle(self, interaction: Interaction) -> None:
@@ -842,7 +866,7 @@ class Music(commands.Cog):
             title=f"Shuffle mode has been {'enabled' if shuffle else 'disabled'}",
             color=Color.green(),
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Changes player volume")
     @app_commands.describe(level="volume level (the higher, the worst)")
@@ -863,7 +887,7 @@ class Music(commands.Cog):
             await player.set_volume(vol=level)
 
         embed = Embed(title="Volume has been changed", color=Color.green())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Sets player filter")
     @app_commands.describe(name="filter name")
@@ -875,9 +899,7 @@ class Music(commands.Cog):
     async def filter(self, interaction: Interaction, name: Filter) -> None:
         _, _ = interaction, name
         # TODO: implement
-        await interaction.response.send_message(
-            content="Not implemented", ephemeral=True
-        )
+        await interaction.response.send_message(content="Not implemented")
 
     _presence_group = app_commands.Group(
         name="presence",
@@ -901,7 +923,7 @@ class Music(commands.Cog):
         )
 
         embed = Embed(title="Stay mode has been activated", color=Color.green())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @_presence_group.command(
         name="leave",
@@ -922,7 +944,7 @@ class Music(commands.Cog):
             await voice_client.disconnect(force=True)
 
         embed = Embed(title="Leave mode has been activated", color=Color.green())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Displays player info")
     @app_commands.guild_only()
@@ -957,7 +979,7 @@ class Music(commands.Cog):
             inline=False,
         )
         embed.add_field(name="┃ Player State :notes:", value=f"- {player_state}")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     async def cog_app_command_error(
         self, interaction: Interaction, error: app_commands.AppCommandError
@@ -1007,6 +1029,14 @@ class Music(commands.Cog):
                 color=Color.yellow(),
             )
             embed.set_footer(text="You still have tomorrow")
+        elif isinstance(error, _FailedToRetrievePlayer):
+            __log__.warning("Failed to retrieve guild player: %v", error.original)
+
+            embed = Embed(
+                title="My assistant just disapeared...",
+                color=Color.yellow(),
+            )
+            embed.set_footer(text="He just doesn't respond to my orders!?")
         elif isinstance(error, _MemberNotInVoiceChannel):
             embed = Embed(
                 title="You must be in a voice channel",
@@ -1044,7 +1074,7 @@ class Music(commands.Cog):
 
             embed = Embed(
                 title="Search didn't proceed as expected",
-                description="I'm sorry, but my associate wasn't able to process your query",
+                description="I'm sorry, but my assistant wasn't able to process your query",
                 color=Color.yellow(),
             )
         elif isinstance(error, _NotPlaying):
@@ -1064,6 +1094,6 @@ class Music(commands.Cog):
             interaction.response.type
             == InteractionResponseType.deferred_channel_message
         ):
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed)
         else:
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
