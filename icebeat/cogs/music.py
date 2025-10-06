@@ -509,7 +509,7 @@ class Music(commands.Cog):
             await interaction.followup.send(embed=embed)
             return
         elif result.load_type == lavalink.LoadType.SEARCH:
-            for i in range(min(len(result.tracks), _MAX_QUEUE_SIZE)):
+            for i in range(min(len(result.tracks), _MAX_SEARCHED_TRACKS)):
                 if result.tracks[i].title == query:
                     tracks = [result.tracks[i]]
                     break
