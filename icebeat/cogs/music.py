@@ -1,4 +1,3 @@
-from __future__ import print_function
 import logging
 import re
 from typing import TYPE_CHECKING, Callable, Optional
@@ -8,7 +7,6 @@ from discord import (
     Color,
     Embed,
     Interaction,
-    InteractionResponseType,
     Member,
     Permissions,
     VoiceChannel,
@@ -195,6 +193,13 @@ class _FailedToRetrievePlayer(app_commands.CheckFailure):
         self.original_error = original_error
 
 
+class _FailedToPreparePlayer(app_commands.CheckFailure):
+    __slots__ = ("original_error",)
+
+    def __init__(self, original_error: Exception) -> None:
+        self.original_error = original_error
+
+
 class _MemberNotInVoiceChannel(app_commands.CheckFailure):
     pass
 
@@ -212,6 +217,12 @@ class _DifferentVoiceChannels(app_commands.CheckFailure):
 
 class _VoiceChannelIsFull(app_commands.CheckFailure):
     pass
+
+
+def _loop_mode(loop: bool) -> int:
+    return (
+        lavalink.DefaultPlayer.LOOP_QUEUE if loop else lavalink.DefaultPlayer.LOOP_NONE
+    )
 
 
 def _ensure_player_is_ready() -> Callable[
@@ -243,9 +254,13 @@ def _ensure_player_is_ready() -> Callable[
                 if len(member_voice_channel.members) >= member_voice_channel.user_limit:
                     raise _VoiceChannelIsFull()
 
-            guild_db = await bot.store.get_guild(guild_id)
+            try:
+                guild_db = await bot.store.get_guild(guild_id)
+                await player.set_volume(guild_db.volume)
+            except Exception as e:
+                raise _FailedToPreparePlayer(e)
             player.set_shuffle(guild_db.shuffle)
-            await player.set_volume(guild_db.volume)
+            player.set_loop(_loop_mode(guild_db.loop))
 
             await member_voice_channel.connect(cls=_LavalinkVoiceClient, self_deaf=True)
 
@@ -907,6 +922,28 @@ class Music(commands.Cog):
         )
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(description="Toggle loop mode")
+    @app_commands.guild_only()
+    @_default_permissions()
+    @_bot_has_permissions()
+    @_is_guild_owner()
+    @_cooldown()
+    @_is_whitelisted()
+    async def loop(self, interaction: Interaction) -> None:
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        loop = await self._bot.store.switch_guild_shuffle(guild_id)
+
+        player = self._get_player(interaction)
+        if player:
+            player.set_loop(_loop_mode(loop))
+
+        embed = Embed(
+            title=f"Loop mode has been {'enabled' if loop else 'disabled'}",
+            color=Color.green(),
+        )
+        await interaction.response.send_message(embed=embed)
+
     @app_commands.command(description="Changes player volume")
     @app_commands.describe(level="volume level (the higher, the worst)")
     @app_commands.guild_only()
@@ -1000,6 +1037,7 @@ class Music(commands.Cog):
         )
         guild_db = await self._bot.store.get_guild(guild_id)  # pyright: ignore[reportArgumentType]
         shuffle_mode_state = "enabled" if guild_db.shuffle else "disabled"
+        loop_mode_state = "enabled" if guild_db.loop else "disabled"
         voice_client: Optional[_LavalinkVoiceClient] = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
         if voice_client:
             player = self._get_player(interaction)
@@ -1013,8 +1051,13 @@ class Music(commands.Cog):
         )
         embed.add_field(name="┃ Volume :sound:", value=f"- {guild_db.volume}")
         embed.add_field(
-            name="┃ Shuffle Mode :game_die:",
+            name="┃ Shuffle Mode :twisted_rightwards_arrows:",
             value=f"- {shuffle_mode_state}",
+            inline=False,
+        )
+        embed.add_field(
+            name="┃ Loop Mode :arrows_counterclockwise:",
+            value=f"- {loop_mode_state}",
             inline=False,
         )
         embed.add_field(name="┃ Player State :notes:", value=f"- {player_state}")
@@ -1076,6 +1119,14 @@ class Music(commands.Cog):
                 color=Color.yellow(),
             )
             embed.set_footer(text="He just doesn't respond to my orders!?")
+        elif isinstance(error, _FailedToPreparePlayer):
+            __log__.warning("Failed to prepare guild player: %v", error.original_error)
+
+            embed = Embed(
+                title="A problem occurred when preparing the player",
+                color=Color.yellow(),
+            )
+            embed.set_footer(text="Everything is fine, it wasn't your fault")
         elif isinstance(error, _MemberNotInVoiceChannel):
             embed = Embed(
                 title="You must be in a voice channel",

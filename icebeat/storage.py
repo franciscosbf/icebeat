@@ -61,7 +61,7 @@ class SQLiteStorage(Storage):
     async def get_guild(self, guild_id: int) -> Guild:
         async with self._connection.execute(
             """
-            SELECT filter, volume, auto_leave, shuffle
+            SELECT filter, volume, auto_leave, shuffle, loop
             FROM guilds
             WHERE id = ?
         """,
@@ -75,6 +75,7 @@ class SQLiteStorage(Storage):
             volume=row[1],
             auto_leave=bool(row[2]),
             shuffle=bool(row[3]),
+            loop=bool(row[4]),
         )
 
     async def create_guild(self, guild_id: int) -> Guild:
@@ -169,6 +170,21 @@ class SQLiteStorage(Storage):
             ON CONFLICT (id)
             DO UPDATE SET shuffle = NOT shuffle
             RETURNING shuffle
+        """,
+            (guild_id,),
+        ) as cursor:
+            row: Row = await cursor.fetchone()  # pyright: ignore
+
+        return bool(row[0])
+
+    async def switch_guild_loop(self, guild_id: int) -> bool:
+        async with self._connection.execute(
+            """
+            INSERT INTO guilds (id)
+            VALUES (?)
+            ON CONFLICT (id)
+            DO UPDATE SET loop = NOT loop
+            RETURNING loop
         """,
             (guild_id,),
         ) as cursor:

@@ -21,6 +21,7 @@ class Guild:
     volume: int
     auto_leave: bool
     shuffle: bool
+    loop: bool
 
 
 @dataclass

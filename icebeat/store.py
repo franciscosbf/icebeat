@@ -51,6 +51,9 @@ class Storage(ABC):
     async def switch_guild_shuffle(self, guild_id: int) -> bool: ...
 
     @abstractmethod
+    async def switch_guild_loop(self, guild_id: int) -> bool: ...
+
+    @abstractmethod
     async def get_whitelist(self) -> Whitelist: ...
 
     @abstractmethod
@@ -101,6 +104,13 @@ class Store:
         self._cache.invalidate_guild(guild_id)
 
         return shuffle
+
+    async def switch_guild_loop(self, guild_id: int) -> bool:
+        loop = await self._storage.switch_guild_loop(guild_id)
+
+        self._cache.invalidate_guild(guild_id)
+
+        return loop
 
     async def get_whitelist(self) -> Whitelist:
         whitelist = self._cache.get_whitelist()
