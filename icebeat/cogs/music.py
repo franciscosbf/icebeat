@@ -260,13 +260,6 @@ def _ensure_player_is_ready() -> Callable[
     return app_commands.check(predicate)
 
 
-class _LavalinkFailedToGetTracks(app_commands.AppCommandError):
-    __slots__ = ("load_result_error",)
-
-    def __init__(self, load_result_error: lavalink.LoadResultError) -> None:
-        self.load_result_error = load_result_error
-
-
 def _milli_to_human_readable(duration: int) -> str:
     total_secs = int(duration / 1_000)
     total_mins = int(total_secs / 60)
@@ -396,7 +389,7 @@ class Music(commands.Cog):
 
     @lavalink.listener(lavalink.TrackStuckEvent)
     async def on_track_stuck(self, event: lavalink.TrackStuckEvent) -> None:
-        __log__.debug(
+        __log__.warning(
             "Track %s got stuck in guild %d player",
             event.track.source_name,
             event.player.guild_id,
@@ -404,7 +397,7 @@ class Music(commands.Cog):
 
     @lavalink.listener(lavalink.TrackExceptionEvent)
     async def on_track_exception(self, event: lavalink.TrackExceptionEvent) -> None:
-        __log__.debug(
+        __log__.warning(
             "Track %s raised playback error on guild %d: %s",
             event.track.source_name,
             event.player.guild_id,
@@ -413,7 +406,7 @@ class Music(commands.Cog):
 
     @lavalink.listener(lavalink.TrackLoadFailedEvent)
     async def on_track_load_failed(self, event: lavalink.TrackLoadFailedEvent) -> None:
-        __log__.debug(
+        __log__.warning(
             "Player has failed to load track %s in guild %d: ",
             event.track.source_name,
             event.player.guild_id,
@@ -426,10 +419,10 @@ class Music(commands.Cog):
         player: lavalink.DefaultPlayer = event.player  # pyright: ignore[reportAssignmentType]
         try:
             await player.play()
-        except lavalink.errors.RequestError:
-            __log__.exception(
-                "Encountered an error when trying to play next enqueued track on guild: %d",
-                player.guild_id,
+        except Exception as e:
+            __log__.warning(
+                "Encountered an error when trying to play next enqueued track: %s",
+                e,
             )
 
             await self._decide_bot_presence(event.player.guild_id)
@@ -452,9 +445,8 @@ class Music(commands.Cog):
 
     @lavalink.listener(lavalink.PlayerErrorEvent)
     async def on_player_error(self, event: lavalink.PlayerErrorEvent) -> None:
-        __log__.exception(
-            "Guild %d player raised exception: %s",
-            event.player.guild_id,
+        __log__.warning(
+            "Player raised an error: %s",
             event.original,
         )
 
@@ -484,10 +476,10 @@ class Music(commands.Cog):
     @app_commands.describe(query="link or normal search as if you were on YouTube")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_whitelisted()
-    @_bot_has_permissions()
     @_ensure_player_is_ready()
+    @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def play(self, interaction: Interaction, query: str) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -495,14 +487,27 @@ class Music(commands.Cog):
         if free_queue_slots == 0:
             embed = Embed(title="Queue is full", color=Color.green())
             embed.set_footer(text=f"Queue only supports up to {_MAX_QUEUE_SIZE} tracks")
-            await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         await interaction.response.defer(thinking=True)
 
-        result = await player.node.get_tracks(
-            query if _URL_RE.match(query) else _QUERY_SEARCH_FMT.format(query)
-        )
+        try:
+            result = await player.node.get_tracks(
+                query if _URL_RE.match(query) else _QUERY_SEARCH_FMT.format(query)
+            )
+        except Exception as e:
+            __log__.warning("Failed to request tracks: %v", e)
+
+            embed = Embed(
+                title="Search didn't proceed as expected",
+                color=Color.green(),
+            )
+            embed.set_footer(text="I wasn't able to contact my assistant")
+            await interaction.followup.send(embed=embed)
+
+            return
+
         if result.load_type == lavalink.LoadType.EMPTY:
             embed = Embed(title="Couldn't find anything to play", color=Color.green())
             embed.set_footer(text="What kind of voodoo shi you trying to do on me?")
@@ -520,7 +525,23 @@ class Music(commands.Cog):
         elif result.load_type == lavalink.LoadType.PLAYLIST:
             tracks = result.tracks
         else:
-            raise _LavalinkFailedToGetTracks(result.error)  # pyright: ignore[reportArgumentType]
+            error: lavalink.LoadResultError = result.error  # pyright: ignore[reportAssignmentType]
+
+            __log__.warning(
+                "Failed to get tracks: message=%s, reason=%s",
+                error.message,
+                error.cause,
+            )
+
+            embed = Embed(
+                title="Sadly, I received an error from my partner", color=Color.green()
+            )
+            embed.set_footer(
+                text="My associate had a problem while processing your search"
+            )
+            await interaction.followup.send(embed=embed)
+
+            return
 
         n_retrieved_tracks = len(tracks)
         n_enqueued_tracks = min(free_queue_slots, n_retrieved_tracks)
@@ -546,13 +567,13 @@ class Music(commands.Cog):
                     f"{'s' if n_retrieved_tracks > 1 else ''} from the playlist, although\n"
                     f"the queue has reached its full capacity ({_MAX_QUEUE_SIZE} tracks)"
                 )
-
         await interaction.followup.send(embed=embed)
 
         if not player.is_playing:
             await player.play()
 
     @play.autocomplete("query")
+    @_is_whitelisted()
     async def play_query_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
@@ -566,7 +587,8 @@ class Music(commands.Cog):
             )
         except Exception as e:
             __log__.warning(
-                "Failed to retrieved guild player: %s",
+                "Failed to retrieve guild player while processing "
+                "autocomplete call for play command: %s",
                 e,
             )
 
@@ -577,7 +599,8 @@ class Music(commands.Cog):
             result = await player.node.get_tracks(query)
         except Exception as e:
             __log__.warning(
-                "Failed to request tracks while autocompleting query argument of play command: %s",
+                "Failed to request tracks while autocompleting"
+                "query argument of play command: %s",
                 e,
             )
 
@@ -596,11 +619,11 @@ class Music(commands.Cog):
     @app_commands.command(description="Stops the player")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_whitelisted()
-    @_bot_has_permissions()
-    @_ensure_player_is_ready()
     @_is_playing()
+    @_ensure_player_is_ready()
+    @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def pause(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -608,19 +631,20 @@ class Music(commands.Cog):
             await player.set_pause(True)
 
             embed = Embed(title="Player has been paused", color=Color.green())
-
+            ephemeral = False
         else:
             embed = Embed(title="Player is already paused", color=Color.green())
-        await interaction.response.send_message(embed=embed)
+            ephemeral = True
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @app_commands.command(description="Resumes the player")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_whitelisted()
-    @_bot_has_permissions()
-    @_ensure_player_is_ready()
     @_is_playing()
+    @_ensure_player_is_ready()
+    @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def resume(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -628,19 +652,20 @@ class Music(commands.Cog):
             await player.set_pause(False)
 
             embed = Embed(title="Player has been resumed", color=Color.green())
-
+            ephemeral = False
         else:
             embed = Embed(title="Player is not paused", color=Color.green())
-        await interaction.response.send_message(embed=embed)
+            ephemeral = True
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @app_commands.command(description="Skips current track")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_whitelisted()
-    @_bot_has_permissions()
-    @_ensure_player_is_ready()
     @_is_playing()
+    @_ensure_player_is_ready()
+    @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def skip(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -653,11 +678,11 @@ class Music(commands.Cog):
     @app_commands.describe(position="track position in queue")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_whitelisted()
-    @_bot_has_permissions()
-    @_ensure_player_is_ready()
     @_is_playing()
+    @_ensure_player_is_ready()
+    @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def jump(
         self,
         interaction: Interaction,
@@ -665,6 +690,7 @@ class Music(commands.Cog):
     ) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
+        ephemeral = True
         if not player.queue:
             embed = Embed(
                 title="Queue is empty",
@@ -685,17 +711,18 @@ class Music(commands.Cog):
                     description=f"**[{next_track.title}]({next_track.uri})**",
                     color=Color.green(),
                 )
+                ephemeral = False
             else:
                 embed = Embed(
                     title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
                     f"and you tried to jump to the {ordinal_position} track",
                     color=Color.green(),
                 )
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @jump.autocomplete("position")
-    @_is_whitelisted()
     @_bot_has_permissions()
+    @_is_whitelisted()
     async def jump_position_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[int]]:
@@ -718,11 +745,11 @@ class Music(commands.Cog):
     @app_commands.describe(position="track position like in the YouTube video player")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_whitelisted()
-    @_bot_has_permissions()
-    @_ensure_player_is_ready()
     @_is_playing()
+    @_ensure_player_is_ready()
+    @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def seek(
         self,
         interaction: Interaction,
@@ -730,6 +757,7 @@ class Music(commands.Cog):
             Optional[tuple[int, str]], _SeekTimeTransformer
         ],
     ) -> None:
+        ephemeral = True
         if not position:
             embed = Embed(
                 title="You must provide a valid position", color=Color.green()
@@ -754,16 +782,17 @@ class Music(commands.Cog):
                     title=f"Seeked to position `{position_original}`",
                     color=Color.green(),
                 )
-        await interaction.response.send_message(embed=embed)
+                ephemeral = False
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @app_commands.command(description="Displays current track")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_whitelisted()
-    @_bot_has_permissions()
-    @_ensure_player_is_ready()
     @_is_playing()
+    @_ensure_player_is_ready()
+    @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def current(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -788,27 +817,29 @@ class Music(commands.Cog):
             if queue_size > 1:
                 text = f"There're {queue_size} tracks in queue"
             else:
-                text = f"There's {queue_size} track in queue"
+                text = "There's 1 track in queue"
             embed.set_footer(text=text)
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(description="Lists queue")
     @app_commands.guild_only()
-    @_is_whitelisted()
-    @_bot_has_permissions()
     @_ensure_player_is_ready()
+    @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def queue(self, interaction: Interaction) -> None:
         _ = interaction
         # TODO: implement
-        await interaction.response.send_message(content="Not implemented")
+        await interaction.response.send_message(
+            content="Not implemented", ephemeral=True
+        )
 
     @app_commands.command(description="Removes all queued tracks")
     @app_commands.guild_only()
-    @_is_whitelisted()
-    @_bot_has_permissions()
     @_ensure_player_is_ready()
+    @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def wipe(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -819,21 +850,22 @@ class Music(commands.Cog):
                 title="The queue is now empty",
                 color=Color.green(),
             )
-
+            ephemeral = False
         else:
             embed = Embed(
                 title="There are no queued tracks",
                 color=Color.green(),
             )
-        await interaction.response.send_message(embed=embed)
+            ephemeral = True
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @app_commands.command(description="Forces me to disconnect from the voice channel")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_whitelisted()
-    @_bot_has_permissions()
     @_ensure_player_is_ready()
+    @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def leave(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -849,10 +881,10 @@ class Music(commands.Cog):
     @app_commands.command(description="Toggle shuffle mode")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_whitelisted()
-    @_is_guild_owner()
     @_bot_has_permissions()
+    @_is_guild_owner()
     @_cooldown()
+    @_is_whitelisted()
     async def shuffle(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
@@ -871,10 +903,10 @@ class Music(commands.Cog):
     @app_commands.command(description="Changes player volume")
     @app_commands.describe(level="volume level (the higher, the worst)")
     @app_commands.guild_only()
-    @_is_whitelisted()
-    @_is_guild_owner()
     @_bot_has_permissions()
+    @_is_guild_owner()
     @_cooldown()
+    @_is_whitelisted()
     async def volume(
         self, interaction: Interaction, level: app_commands.Range[int, 0, 100]
     ) -> None:
@@ -892,10 +924,10 @@ class Music(commands.Cog):
     @app_commands.command(description="Sets player filter")
     @app_commands.describe(name="filter name")
     @app_commands.guild_only()
-    @_is_whitelisted()
-    @_is_guild_owner()
     @_bot_has_permissions()
+    @_is_guild_owner()
     @_cooldown()
+    @_is_whitelisted()
     async def filter(self, interaction: Interaction, name: Filter) -> None:
         _, _ = interaction, name
         # TODO: implement
@@ -912,10 +944,10 @@ class Music(commands.Cog):
         name="stay",
         description="Bot won’t leave the voice channel when the queue's empty",
     )
-    @_is_whitelisted()
-    @_is_guild_owner()
     @_bot_has_permissions()
+    @_is_guild_owner()
     @_cooldown()
+    @_is_whitelisted()
     async def presence_stay(self, interaction: Interaction) -> None:
         await self._bot.store.set_guild_auto_leave(
             interaction.guild_id,  # pyright: ignore[reportArgumentType]
@@ -929,10 +961,10 @@ class Music(commands.Cog):
         name="leave",
         description="Bot will leave the voice channel when the queue's empty",
     )
-    @_is_whitelisted()
-    @_is_guild_owner()
     @_bot_has_permissions()
+    @_is_guild_owner()
     @_cooldown()
+    @_is_whitelisted()
     async def presence_leave(self, interaction: Interaction) -> None:
         await self._bot.store.set_guild_auto_leave(
             interaction.guild_id,  # pyright: ignore[reportArgumentType]
@@ -949,9 +981,9 @@ class Music(commands.Cog):
     @app_commands.command(description="Displays player info")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
+    @_is_whitelisted()
     async def player(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
@@ -979,7 +1011,7 @@ class Music(commands.Cog):
             inline=False,
         )
         embed.add_field(name="┃ Player State :notes:", value=f"- {player_state}")
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def cog_app_command_error(
         self, interaction: Interaction, error: app_commands.AppCommandError
@@ -1064,19 +1096,6 @@ class Music(commands.Cog):
                 color=Color.yellow(),
             )
             embed.set_footer(text="I meant it's full... duh")
-        elif isinstance(error, _LavalinkFailedToGetTracks):
-            load_result_error = error.load_result_error
-            __log__.warning(
-                "Failed to get tracks: message=%s, reason=%s",
-                load_result_error.message,
-                load_result_error.cause,
-            )
-
-            embed = Embed(
-                title="Search didn't proceed as expected",
-                description="I'm sorry, but my assistant wasn't able to process your query",
-                color=Color.yellow(),
-            )
         elif isinstance(error, _NotPlaying):
             embed = Embed(title="There's no track in the player", color=Color.yellow())
         else:
@@ -1086,14 +1105,7 @@ class Music(commands.Cog):
             )
 
             embed = Embed(
-                title="Something unexpected went wrong...",
+                title="Something bad has happened and I dunno why...",
                 color=Color.red(),
             )
-
-        if (
-            interaction.response.type
-            == InteractionResponseType.deferred_channel_message
-        ):
-            await interaction.followup.send(embed=embed)
-        else:
-            await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
