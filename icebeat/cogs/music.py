@@ -307,7 +307,7 @@ def _is_playing() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
         bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
-        player: lavalink.DefaultPlayer = bot.lavalink_client.player_manager.get(
+        player: lavalink.DefaultPlayer = bot.lavalink_client.player_manager.create(
             guild_id
         )  # pyright: ignore[reportAssignmentType]
 
@@ -809,7 +809,8 @@ class Music(commands.Cog):
         embed = Embed(
             title=f"Playing at <#{voice_client.channel.id}>"
             f"{' (paused)' if player.paused else ''}",
-            description=f"**[{current_track.title}]({current_track.uri})**\n\n{player_bar}",
+            description=f"**[{current_track.title}]({current_track.uri})**\n\n"
+            f"{player_bar}\n\n**Enqueued by** <@{current_track.requester}>",
             color=Color.green(),
         )
         if player.queue:
