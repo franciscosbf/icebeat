@@ -669,9 +669,15 @@ class Music(commands.Cog):
     async def skip(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
+        current_track: lavalink.AudioTrack = player.current  # pyright: ignore[reportAssignmentType]
+
         await player.skip()
 
-        embed = Embed(title="Skipped current track", color=Color.green())
+        embed = Embed(
+            title="Skipped current track",
+            description=f"**I was playing [{current_track.title}]({current_track.uri})**",
+            color=Color.green(),
+        )
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Jumps to a given enqueued track")
