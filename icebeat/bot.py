@@ -12,6 +12,7 @@ from discord import (
     Status,
 )
 import discord
+from discord.abc import Snowflake
 from discord.ext import commands
 import lavalink
 
@@ -59,15 +60,30 @@ class IceBeat(commands.Bot):
         self.lavalink_client: lavalink.Client = None  # pyright: ignore[reportAttributeAccessIssue]
 
     async def _verify_whitelisted_guilds(self) -> None:
-        for guild_id in (await self.store.get_whitelist()).guild_ids:
+        whitelist = await self.store.get_whitelist()
+
+        for guild_id in whitelist.guild_ids:
             try:
                 await self.fetch_guild_preview(guild_id)
             except discord.NotFound:
                 await self.store.remove_from_whitelist(guild_id)
 
                 __log__.info(
-                    f"Server {guild_id} was removed from whitelist as I couldn't find it"
+                    f"Server {guild_id} was removed from whitelist as I couldn't find it on Discord"
                 )
+
+        async for guild in self.fetch_guilds(limit=None):
+            if guild.id not in whitelist.guild_ids:
+                await self.remove_app_commands_from_guild(guild)
+
+    async def _prepare_whitelisted_guilds(self) -> None:
+        whitelist = await self.store.get_whitelist()
+        whitelisted_guilds = [Object(id=guild_id) for guild_id in whitelist.guild_ids]
+
+        await self.add_cog(Music(self), guilds=whitelisted_guilds)
+
+        for whitelisted_guild in whitelisted_guilds:
+            await self.tree.sync(guild=whitelisted_guild)
 
     async def _unload_cogs(self) -> None:
         for cog_name in list(self.cogs.keys()):
@@ -78,12 +94,7 @@ class IceBeat(commands.Bot):
 
         await self._verify_whitelisted_guilds()
 
-        whitelist = await self.store.get_whitelist()
-        whitelisted_guilds = [Object(id=guild_id) for guild_id in whitelist.guild_ids]
-        await self.add_cog(Music(self), guilds=whitelisted_guilds)
-
-        for whitelisted_guild in whitelisted_guilds:
-            await self.tree.sync(guild=whitelisted_guild)
+        await self._prepare_whitelisted_guilds()
 
     async def on_connect(self) -> None:
         __log__.info("Connected to Discord")
@@ -103,9 +114,6 @@ class IceBeat(commands.Bot):
     async def on_guild_remove(self, guild: Guild) -> None:
         await self.store.remove_from_whitelist(guild.id)
 
-    async def on_guild_channel_delete(self, guild: Guild) -> None:
-        await self.store.unset_guild_text_channel_id(guild.id)
-
     async def on_error(self, event_method: str, /, *args: Any, **kwargs: Any) -> None:
         _, _ = args, kwargs
 
@@ -116,17 +124,19 @@ class IceBeat(commands.Bot):
     ) -> None:
         _, _ = ctx, error
 
-    async def add_app_commands_to_guild(self, guild: Guild) -> None:
+    async def add_app_commands_to_guild(self, guild: Snowflake) -> None:
         for cog in self.cogs.values():
-            for command in cog.get_app_commands():
+            commands = cog.get_app_commands()
+            for command in commands:
                 self.tree.add_command(command, guild=guild, override=True)
         await self.tree.sync(guild=guild)
 
-    async def remove_app_commands_from_guild(self, guild: Guild) -> None:
+    async def remove_app_commands_from_guild(self, guild: Snowflake) -> None:
         self.tree.clear_commands(guild=guild)
         await self.tree.sync(guild=guild)
 
-        for command in await self.tree.fetch_commands(guild=guild):
+        commands = await self.tree.fetch_commands(guild=guild)
+        for command in commands:
             await self.http.delete_guild_command(self.client.id, guild.id, command.id)  # pyright: ignore[reportAttributeAccessIssue]
 
     async def __aexit__(
