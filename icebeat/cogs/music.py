@@ -1,4 +1,5 @@
 import logging
+from os import name
 import re
 from typing import TYPE_CHECKING, Callable, Optional
 
@@ -1038,6 +1039,7 @@ class Music(commands.Cog):
         guild_db = await self._bot.store.get_guild(guild_id)  # pyright: ignore[reportArgumentType]
         shuffle_mode_state = "enabled" if guild_db.shuffle else "disabled"
         loop_mode_state = "enabled" if guild_db.loop else "disabled"
+        bot_presence = "stay" if guild_db.auto_leave else "leave"
         voice_client: Optional[_LavalinkVoiceClient] = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
         if voice_client:
             player = self._get_player(interaction)
@@ -1047,20 +1049,23 @@ class Music(commands.Cog):
         else:
             player_state = "not connected"
         embed.add_field(
-            name="┃ Filter :level_slider:", value=f"- {guild_db.filter.name}"
+            name="┃ Filter :level_slider:",
+            value=f"- {guild_db.filter.name}",
         )
         embed.add_field(name="┃ Volume :sound:", value=f"- {guild_db.volume}")
         embed.add_field(
             name="┃ Shuffle Mode :twisted_rightwards_arrows:",
             value=f"- {shuffle_mode_state}",
-            inline=False,
         )
         embed.add_field(
             name="┃ Loop Mode :arrows_counterclockwise:",
             value=f"- {loop_mode_state}",
-            inline=False,
         )
-        embed.add_field(name="┃ Player State :notes:", value=f"- {player_state}")
+        embed.add_field(
+            name="┃ Presence on Empty Queue :hand_splayed:",
+            value=f"- {bot_presence}",
+        )
+        embed.add_field(name="┃ State :notes:", value=f"- {player_state}")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def cog_app_command_error(
