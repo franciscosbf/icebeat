@@ -944,7 +944,7 @@ class Music(commands.Cog):
         )
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(description="Toggle shuffle mode")
+    @app_commands.command(description="Toggles queue's shuffle mode")
     @app_commands.guild_only()
     @_default_permissions()
     @_bot_has_permissions()
@@ -966,7 +966,7 @@ class Music(commands.Cog):
         )
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(description="Toggle loop mode")
+    @app_commands.command(description="Toggles queue's loop mode")
     @app_commands.guild_only()
     @_default_permissions()
     @_bot_has_permissions()
