@@ -12,6 +12,7 @@ class Filter(Enum):
     treblebass = 4
     eightd = 5
     karaoke = 6
+    vaporwave = 7
 
 
 @dataclass
