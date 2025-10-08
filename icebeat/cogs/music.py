@@ -1,5 +1,4 @@
 import logging
-from os import name
 import re
 from typing import TYPE_CHECKING, Callable, Optional
 
@@ -700,7 +699,6 @@ class Music(commands.Cog):
     @app_commands.describe(position="track position in queue")
     @app_commands.guild_only()
     @_default_permissions()
-    @_is_playing()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
     @_cooldown()
@@ -729,7 +727,7 @@ class Music(commands.Cog):
                 await player.skip()
 
                 embed = Embed(
-                    title=f"Jumping to the {ordinal_position} track",
+                    title=f"Jumping to the {ordinal_position} track in queue",
                     description=f"**[{next_track.title}]({next_track.uri})**",
                     color=Color.green(),
                 )
@@ -742,10 +740,53 @@ class Music(commands.Cog):
                 )
         await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
+    @app_commands.command(description="Removes a track from queue given its position")
+    @app_commands.describe(position="track position in queue")
+    @app_commands.guild_only()
+    @_default_permissions()
+    @_ensure_player_is_ready()
+    @_bot_has_permissions()
+    @_cooldown()
+    @_is_whitelisted()
+    async def pop(
+        self,
+        interaction: Interaction,
+        position: app_commands.Range[int, 1, None],
+    ) -> None:
+        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+
+        ephemeral = True
+        if not player.queue:
+            embed = Embed(
+                title="Queue is empty",
+                color=Color.green(),
+            )
+        else:
+            queue_size = len(player.queue)
+            ordinal_position = _to_ordinal(position)
+            if position <= queue_size:
+                removed_track = player.queue[position - 1]
+                player.queue.pop(position - 1)
+
+                embed = Embed(
+                    title=f"Successfully popped the {ordinal_position} track from queue",
+                    description=f"**[{removed_track.title}]({removed_track.uri})**",
+                    color=Color.green(),
+                )
+                ephemeral = False
+            else:
+                embed = Embed(
+                    title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
+                    f"and you tried to remove the {ordinal_position} track",
+                    color=Color.green(),
+                )
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+
     @jump.autocomplete("position")
+    @pop.autocomplete("position")
     @_bot_has_permissions()
     @_is_whitelisted()
-    async def jump_position_autocomplete(
+    async def jump_and_pop_position_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[int]]:
         if not current.isdigit():
