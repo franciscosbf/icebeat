@@ -60,6 +60,70 @@ _ORDINAL_SUFFIX = (
     "th",
     "th",
 )
+_FILTER_PRESETS = {
+    Filter.bassboost: lavalink.Equalizer(
+        gains=[
+            0.6,
+            0.67,
+            0.67,
+            0.0,
+            -0.5,
+            0.15,
+            -0.45,
+            0.23,
+            0.35,
+            0.45,
+            0.55,
+            0.6,
+            0.55,
+            0.0,
+        ]
+    ),
+    Filter.pop: lavalink.Equalizer(
+        [
+            0.65,
+            0.45,
+            -0.45,
+            -0.65,
+            -0.35,
+            0.45,
+            0.55,
+            0.6,
+            0.6,
+            0.6,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ]
+    ),
+    Filter.soft: lavalink.LowPass(),
+    Filter.treblebass: lavalink.Equalizer(
+        gains=[
+            0.6,
+            0.67,
+            0.67,
+            0.0,
+            -0.5,
+            0.15,
+            -0.45,
+            0.23,
+            0.35,
+            0.45,
+            0.55,
+            0.6,
+            0.55,
+            0.0,
+        ]
+    ),
+    Filter.eightd: lavalink.Rotation(rotation_hz=0.2),
+    Filter.karaoke: lavalink.Karaoke(),
+    Filter.vaporwave: [
+        lavalink.Equalizer(gains=[0.3, 0.3]),
+        lavalink.Timescale(pitch=0.5),
+        lavalink.Tremolo(frequency=14, depth=0.3),
+    ],
+}
 
 
 def _default_permissions() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
@@ -223,72 +287,6 @@ def _loop_mode(loop: bool) -> int:
     return (
         lavalink.DefaultPlayer.LOOP_QUEUE if loop else lavalink.DefaultPlayer.LOOP_NONE
     )
-
-
-_FILTER_PRESETS = {
-    Filter.bassboost: lavalink.Equalizer(
-        gains=[
-            0.6,
-            0.67,
-            0.67,
-            0.0,
-            -0.5,
-            0.15,
-            -0.45,
-            0.23,
-            0.35,
-            0.45,
-            0.55,
-            0.6,
-            0.55,
-            0.0,
-        ]
-    ),
-    Filter.pop: lavalink.Equalizer(
-        [
-            0.65,
-            0.45,
-            -0.45,
-            -0.65,
-            -0.35,
-            0.45,
-            0.55,
-            0.6,
-            0.6,
-            0.6,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-        ]
-    ),
-    Filter.soft: lavalink.LowPass(),
-    Filter.treblebass: lavalink.Equalizer(
-        gains=[
-            0.6,
-            0.67,
-            0.67,
-            0.0,
-            -0.5,
-            0.15,
-            -0.45,
-            0.23,
-            0.35,
-            0.45,
-            0.55,
-            0.6,
-            0.55,
-            0.0,
-        ]
-    ),
-    Filter.eightd: lavalink.Rotation(rotation_hz=0.2),
-    Filter.karaoke: lavalink.Karaoke(),
-    Filter.vaporwave: [
-        lavalink.Equalizer(gains=[0.3, 0.3]),
-        lavalink.Timescale(pitch=0.5),
-        lavalink.Tremolo(frequency=14, depth=0.3),
-    ],
-}
 
 
 async def _set_filter_preset(player: lavalink.DefaultPlayer, filter: Filter) -> None:
