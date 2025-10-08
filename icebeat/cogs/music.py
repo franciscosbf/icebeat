@@ -225,6 +225,84 @@ def _loop_mode(loop: bool) -> int:
     )
 
 
+_FILTER_PRESETS = {
+    Filter.bassboost: lavalink.Equalizer(
+        gains=[
+            0.6,
+            0.67,
+            0.67,
+            0.0,
+            -0.5,
+            0.15,
+            -0.45,
+            0.23,
+            0.35,
+            0.45,
+            0.55,
+            0.6,
+            0.55,
+            0.0,
+        ]
+    ),
+    Filter.pop: lavalink.Equalizer(
+        [
+            0.65,
+            0.45,
+            -0.45,
+            -0.65,
+            -0.35,
+            0.45,
+            0.55,
+            0.6,
+            0.6,
+            0.6,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ]
+    ),
+    Filter.soft: lavalink.LowPass(),
+    Filter.treblebass: lavalink.Equalizer(
+        gains=[
+            0.6,
+            0.67,
+            0.67,
+            0.0,
+            -0.5,
+            0.15,
+            -0.45,
+            0.23,
+            0.35,
+            0.45,
+            0.55,
+            0.6,
+            0.55,
+            0.0,
+        ]
+    ),
+    Filter.eightd: lavalink.Rotation(rotation_hz=0.2),
+    Filter.karaoke: lavalink.Karaoke(),
+    Filter.vaporwave: [
+        lavalink.Equalizer(gains=[0.3, 0.3]),
+        lavalink.Timescale(pitch=0.5),
+        lavalink.Tremolo(frequency=14, depth=0.3),
+    ],
+}
+
+
+async def _set_filter_preset(player: lavalink.DefaultPlayer, filter: Filter) -> None:
+    if filter == Filter.normal:
+        await player.clear_filters()
+        return
+
+    filter_preset = _FILTER_PRESETS[filter]
+    if filter == Filter.vaporwave:
+        await player.set_filters(*filter_preset)
+    else:
+        await player.set_filter(filter_preset)
+
+
 def _ensure_player_is_ready() -> Callable[
     [app_commands.checks.T], app_commands.checks.T
 ]:
@@ -257,6 +335,7 @@ def _ensure_player_is_ready() -> Callable[
             try:
                 guild_db = await bot.store.get_guild(guild_id)
                 await player.set_volume(guild_db.volume)
+                await _set_filter_preset(player, guild_db.filter)
             except Exception as e:
                 raise _FailedToPreparePlayer(e)
             player.set_shuffle(guild_db.shuffle)
@@ -991,6 +1070,7 @@ class Music(commands.Cog):
     @app_commands.command(description="Changes player volume")
     @app_commands.describe(level="volume level (the higher, the worst)")
     @app_commands.guild_only()
+    @_default_permissions()
     @_bot_has_permissions()
     @_is_guild_owner()
     @_cooldown()
@@ -1010,16 +1090,30 @@ class Music(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Sets player filter")
-    @app_commands.describe(name="filter name")
-    @app_commands.guild_only()
+    @app_commands.rename(filter="name")
+    @app_commands.describe(filter="filter name")
+    @_default_permissions()
     @_bot_has_permissions()
     @_is_guild_owner()
     @_cooldown()
     @_is_whitelisted()
-    async def filter(self, interaction: Interaction, name: Filter) -> None:
-        _, _ = interaction, name
-        # TODO: implement
-        await interaction.response.send_message(content="Not implemented")
+    async def filter(
+        self,
+        interaction: Interaction,
+        filter: Filter,
+    ) -> None:
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        await self._bot.store.set_guild_filter(guild_id, filter)
+
+        player = self._get_player(interaction)
+        if player:
+            await _set_filter_preset(player, filter)
+
+        embed = Embed(
+            title=f"Filter has been changed to {filter.name}", color=Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
 
     _presence_group = app_commands.Group(
         name="presence",
@@ -1032,6 +1126,7 @@ class Music(commands.Cog):
         name="stay",
         description="Bot won’t leave the voice channel when the queue's empty",
     )
+    @_default_permissions()
     @_bot_has_permissions()
     @_is_guild_owner()
     @_cooldown()
@@ -1049,6 +1144,7 @@ class Music(commands.Cog):
         name="leave",
         description="Bot will leave the voice channel when the queue's empty",
     )
+    @_default_permissions()
     @_bot_has_permissions()
     @_is_guild_owner()
     @_cooldown()
