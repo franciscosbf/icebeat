@@ -38,7 +38,7 @@ _SEEK_TIME_RE = re.compile(
 )
 _QUERY_SEARCH_FMT = "ytsearch:{}"
 _MAX_SEARCHED_TRACKS = 6
-_DEFAULT_PERMISSIONS = Permissions(
+_DEFAULT_USER_PERMISSIONS = Permissions(
     connect=True,
     use_application_commands=True,
 )
@@ -126,8 +126,10 @@ _FILTER_PRESETS = {
 }
 
 
-def _default_permissions() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
-    return app_commands.default_permissions(_DEFAULT_PERMISSIONS)
+def _default_user_permissions() -> Callable[
+    [app_commands.checks.T], app_commands.checks.T
+]:
+    return app_commands.default_permissions(_DEFAULT_USER_PERMISSIONS)
 
 
 def _cooldown() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
@@ -567,7 +569,7 @@ class Music(commands.Cog):
     @app_commands.command(description="Request something to play")
     @app_commands.describe(query="link or normal search as if you were on YouTube")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
     @_cooldown()
@@ -710,7 +712,7 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Stops the player")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_is_playing()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
@@ -731,7 +733,7 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Resumes the player")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_is_playing()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
@@ -752,7 +754,7 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Skips current track")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_is_playing()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
@@ -775,7 +777,7 @@ class Music(commands.Cog):
     @app_commands.command(description="Jumps to a given enqueued track")
     @app_commands.describe(position="track position in queue")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
     @_cooldown()
@@ -820,7 +822,7 @@ class Music(commands.Cog):
     @app_commands.command(description="Removes a track from queue given its position")
     @app_commands.describe(position="track position in queue")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
     @_cooldown()
@@ -886,7 +888,7 @@ class Music(commands.Cog):
         position="track position like in the YouTube video player, like 5:38"
     )
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_is_playing()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
@@ -929,7 +931,7 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Displays current track")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_is_playing()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
@@ -1004,7 +1006,7 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Forces me to disconnect from the voice channel")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
     @_cooldown()
@@ -1023,7 +1025,7 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Toggles queue's shuffle mode")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_bot_has_permissions()
     @_is_guild_owner()
     @_cooldown()
@@ -1045,7 +1047,7 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Toggles queue's loop mode")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_bot_has_permissions()
     @_is_guild_owner()
     @_cooldown()
@@ -1068,7 +1070,7 @@ class Music(commands.Cog):
     @app_commands.command(description="Changes player volume")
     @app_commands.describe(level="volume level (the higher, the worst)")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_bot_has_permissions()
     @_is_guild_owner()
     @_cooldown()
@@ -1090,7 +1092,7 @@ class Music(commands.Cog):
     @app_commands.command(description="Sets player filter")
     @app_commands.rename(filter="name")
     @app_commands.describe(filter="filter name")
-    @_default_permissions()
+    @_default_user_permissions()
     @_bot_has_permissions()
     @_is_guild_owner()
     @_cooldown()
@@ -1117,14 +1119,14 @@ class Music(commands.Cog):
         name="presence",
         description="Decides bot behaviour when queue is empty (the bot leaves the voice channel when it's alone)",
         guild_only=True,
-        default_permissions=_DEFAULT_PERMISSIONS,
+        default_permissions=_DEFAULT_USER_PERMISSIONS,
     )
 
     @_presence_group.command(
         name="stay",
         description="Bot won’t leave the voice channel when the queue's empty",
     )
-    @_default_permissions()
+    @_default_user_permissions()
     @_bot_has_permissions()
     @_is_guild_owner()
     @_cooldown()
@@ -1142,7 +1144,7 @@ class Music(commands.Cog):
         name="leave",
         description="Bot will leave the voice channel when the queue's empty",
     )
-    @_default_permissions()
+    @_default_user_permissions()
     @_bot_has_permissions()
     @_is_guild_owner()
     @_cooldown()
@@ -1162,7 +1164,7 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Displays player info")
     @app_commands.guild_only()
-    @_default_permissions()
+    @_default_user_permissions()
     @_bot_has_permissions()
     @_cooldown()
     @_is_whitelisted()
