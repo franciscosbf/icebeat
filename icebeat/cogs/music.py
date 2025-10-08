@@ -589,7 +589,7 @@ class Music(commands.Cog):
 
     @play.autocomplete("query")
     @_is_whitelisted()
-    async def play_query_autocomplete(
+    async def query_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
         if _URL_RE.match(current):
@@ -786,7 +786,7 @@ class Music(commands.Cog):
     @pop.autocomplete("position")
     @_bot_has_permissions()
     @_is_whitelisted()
-    async def jump_and_pop_position_autocomplete(
+    async def position_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[int]]:
         if not current.isdigit():
