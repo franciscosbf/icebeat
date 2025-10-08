@@ -805,7 +805,9 @@ class Music(commands.Cog):
         return [app_commands.Choice(name=track.title, value=position)]
 
     @app_commands.command(description="Seeks to a given position in the track")
-    @app_commands.describe(position="track position like in the YouTube video player")
+    @app_commands.describe(
+        position="track position like in the YouTube video player, like 5:38"
+    )
     @app_commands.guild_only()
     @_default_permissions()
     @_is_playing()
