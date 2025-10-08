@@ -61,7 +61,7 @@ class SQLiteStorage(Storage):
     async def get_guild(self, guild_id: int) -> Guild:
         async with self._connection.execute(
             """
-            SELECT filter, volume, auto_leave, shuffle, loop
+            SELECT staff_role_id, filter, volume, auto_leave, shuffle, loop
             FROM guilds
             WHERE id = ?
         """,
@@ -71,11 +71,12 @@ class SQLiteStorage(Storage):
 
         return Guild(
             id=guild_id,
-            filter=Filter(row[0]),
-            volume=row[1],
-            auto_leave=bool(row[2]),
-            shuffle=bool(row[3]),
-            loop=bool(row[4]),
+            staff_role_id=row[0],
+            filter=Filter(row[1]),
+            volume=row[2],
+            auto_leave=bool(row[3]),
+            shuffle=bool(row[4]),
+            loop=bool(row[5]),
         )
 
     async def create_guild(self, guild_id: int) -> Guild:
@@ -91,42 +92,38 @@ class SQLiteStorage(Storage):
 
         return await self.get_guild(guild_id)
 
-    async def set_guild_text_channel(self, guild_id: int, text_channel: bool) -> None:
+    async def set_guild_staff_role_id(self, guild_id: int, staff_role_id: int) -> None:
         await self._connection.execute_auto_closable_commited(
             """
-            INSERT INTO guilds (id, text_channel)
-            VALUES (:id, :text_channel)
+            INSERT INTO guilds (id, staff_role_id)
+            VALUES (:id, :staff_role_id)
             ON CONFLICT (id)
-            DO UPDATE SET text_channel = :text_channel
-        """,
-            {"id": guild_id, "text_channel": int(text_channel)},
-        )
-
-    async def set_guild_text_channel_id(
-        self, guild_id: int, text_channel_id: int
-    ) -> None:
-        await self._connection.execute_auto_closable_commited(
-            """
-            INSERT INTO guilds (id, text_channel_id)
-            VALUES (:id, :text_channel_id)
-            ON CONFLICT (id)
-            DO UPDATE SET text_channel_id = :text_channel_id
+            DO UPDATE SET staff_role_id = :staff_role_id
         """,
             {
                 "id": guild_id,
-                "text_channel_id": text_channel_id,
+                "staff_role_id": staff_role_id,
             },
         )
 
-    async def unset_guild_text_channel_id(self, guild_id: int) -> None:
+    async def unset_guild_staff_role_id_if_same(
+        self, guild_id: int, expected_staff_role_id: int
+    ) -> None:
         await self._connection.execute_auto_closable_commited(
             """
-            INSERT INTO guilds (id, text_channel_id)
-            VALUES (?, null)
+            INSERT INTO guilds (id)
+            VALUES (:id)
             ON CONFLICT (id)
-            DO UPDATE SET text_channel_id = null
+            DO UPDATE SET staff_role_id =
+                CASE WHEN staff_role_id = :expected_staff_role_id
+                    THEN NULL
+                    ELSE staff_role_id
+                END
         """,
-            (guild_id,),
+            {
+                "id": guild_id,
+                "expected_staff_role_id": expected_staff_role_id,
+            },
         )
 
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None:

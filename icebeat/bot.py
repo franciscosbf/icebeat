@@ -9,6 +9,7 @@ from discord import (
     Intents,
     MemberCacheFlags,
     Object,
+    Role,
     Status,
 )
 import discord
@@ -113,6 +114,9 @@ class IceBeat(commands.Bot):
 
     async def on_guild_remove(self, guild: Guild) -> None:
         await self.store.remove_from_whitelist(guild.id)
+
+    async def on_guild_role_delete(self, role: Role) -> None:
+        await self.store.unset_guild_staff_role_id_if_same(role.guild.id, role.id)
 
     async def on_error(self, event_method: str, /, *args: Any, **kwargs: Any) -> None:
         _, _ = args, kwargs

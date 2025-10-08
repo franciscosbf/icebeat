@@ -39,6 +39,16 @@ class Storage(ABC):
     async def create_guild(self, guild_id: int) -> Guild: ...
 
     @abstractmethod
+    async def set_guild_staff_role_id(
+        self, guild_id: int, staff_role_id: int
+    ) -> None: ...
+
+    @abstractmethod
+    async def unset_guild_staff_role_id_if_same(
+        self, guild_id: int, expected_staff_role_id: int
+    ) -> None: ...
+
+    @abstractmethod
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None: ...
 
     @abstractmethod
@@ -82,6 +92,20 @@ class Store:
 
     async def create_guild(self, guild_id: int) -> None:
         await self.get_guild(guild_id)
+
+    async def set_guild_staff_role_id(self, guild_id: int, staff_role_id: int) -> None:
+        await self._storage.set_guild_staff_role_id(guild_id, staff_role_id)
+
+        self._cache.invalidate_guild(guild_id)
+
+    async def unset_guild_staff_role_id_if_same(
+        self, guild_id: int, expected_staff_role_id: int
+    ) -> None:
+        await self._storage.unset_guild_staff_role_id_if_same(
+            guild_id, expected_staff_role_id
+        )
+
+        self._cache.invalidate_guild(guild_id)
 
     async def set_guild_filter(self, guild_id: int, filter: Filter) -> None:
         await self._storage.set_guild_filter(guild_id, filter)

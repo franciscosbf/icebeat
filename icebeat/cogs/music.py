@@ -6,9 +6,11 @@ from discord import (
     Client,
     Color,
     Embed,
+    Guild,
     Interaction,
     Member,
     Permissions,
+    Role,
     VoiceChannel,
     VoiceProtocol,
     VoiceState,
@@ -162,7 +164,38 @@ def _is_guild_owner() -> Callable[[app_commands.checks.T], app_commands.checks.T
     def predicate(interaction: Interaction) -> bool:
         if interaction.user.id == interaction.guild.owner_id:  # pyright: ignore[reportOptionalMemberAccess]
             return True
+
         raise _NotGuildOwner()
+
+    return app_commands.check(predicate)
+
+
+class _NotGuildOwnerNorStaff(app_commands.CheckFailure):
+    pass
+
+
+def _is_guild_owner_or_staff() -> Callable[
+    [app_commands.checks.T], app_commands.checks.T
+]:
+    async def predicate(interaction: Interaction) -> bool:
+        member: Member = interaction.user  # pyright: ignore[reportAssignmentType]
+        guild: Guild = interaction.guild  # pyright: ignore[reportAssignmentType]
+
+        if member.id == guild.owner_id:
+            return True
+
+        bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
+
+        guild_db = await bot.store.get_guild(guild.id)
+        if guild_db.staff_role_id:
+            if not guild.get_role(guild_db.staff_role_id):
+                await bot.store.unset_guild_staff_role_id_if_same(
+                    guild.id, guild_db.staff_role_id
+                )
+            elif member.get_role(guild_db.staff_role_id):
+                return True
+
+        raise _NotGuildOwnerNorStaff()
 
     return app_commands.check(predicate)
 
@@ -1027,7 +1060,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_bot_has_permissions()
-    @_is_guild_owner()
+    @_is_guild_owner_or_staff()
     @_cooldown()
     @_is_whitelisted()
     async def shuffle(self, interaction: Interaction) -> None:
@@ -1049,7 +1082,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_bot_has_permissions()
-    @_is_guild_owner()
+    @_is_guild_owner_or_staff()
     @_cooldown()
     @_is_whitelisted()
     async def loop(self, interaction: Interaction) -> None:
@@ -1072,7 +1105,7 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_bot_has_permissions()
-    @_is_guild_owner()
+    @_is_guild_owner_or_staff()
     @_cooldown()
     @_is_whitelisted()
     async def volume(
@@ -1094,7 +1127,7 @@ class Music(commands.Cog):
     @app_commands.describe(filter="filter name")
     @_default_user_permissions()
     @_bot_has_permissions()
-    @_is_guild_owner()
+    @_is_guild_owner_or_staff()
     @_cooldown()
     @_is_whitelisted()
     async def filter(
@@ -1128,7 +1161,7 @@ class Music(commands.Cog):
     )
     @_default_user_permissions()
     @_bot_has_permissions()
-    @_is_guild_owner()
+    @_is_guild_owner_or_staff()
     @_cooldown()
     @_is_whitelisted()
     async def presence_stay(self, interaction: Interaction) -> None:
@@ -1146,7 +1179,7 @@ class Music(commands.Cog):
     )
     @_default_user_permissions()
     @_bot_has_permissions()
-    @_is_guild_owner()
+    @_is_guild_owner_or_staff()
     @_cooldown()
     @_is_whitelisted()
     async def presence_leave(self, interaction: Interaction) -> None:
@@ -1160,6 +1193,55 @@ class Music(commands.Cog):
             await voice_client.disconnect(force=True)
 
         embed = Embed(title="Leave mode has been activated", color=Color.green())
+        await interaction.response.send_message(embed=embed)
+
+    _staff_group = app_commands.Group(
+        name="staff",
+        description="Manages server staff role",
+        guild_only=True,
+        default_permissions=_DEFAULT_USER_PERMISSIONS,
+    )
+
+    @_staff_group.command(
+        name="set",
+        description="Sets staff role (additional users are allowed to configure the player)",
+    )
+    @app_commands.describe(role="staff role")
+    @_default_user_permissions()
+    @_bot_has_permissions()
+    @_is_guild_owner()
+    @_cooldown()
+    @_is_whitelisted()
+    async def staff_set(self, interaction: Interaction, role: Role) -> None:
+        await self._bot.store.set_guild_staff_role_id(
+            interaction.guild_id,  # pyright: ignore[reportArgumentType]
+            role.id,
+        )
+
+        embed = Embed(
+            title=f'Staff role has been set to "{role.name}"', color=Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @_staff_group.command(
+        name="unset",
+        description="Removes staff role (only the server owner will be allowed to configure the player)",
+    )
+    @_default_user_permissions()
+    @_bot_has_permissions()
+    @_is_guild_owner()
+    @_cooldown()
+    @_is_whitelisted()
+    async def staff_unset(self, interaction: Interaction) -> None:
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        guild_db = await self._bot.store.get_guild(guild_id)
+        if guild_db.staff_role_id:
+            await self._bot.store.unset_guild_staff_role_id_if_same(
+                guild_id, guild_db.staff_role_id
+            )
+
+        embed = Embed(title="Staff role has been removed", color=Color.green())
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Displays player info")
@@ -1187,6 +1269,12 @@ class Music(commands.Cog):
             )
         else:
             player_state = "not connected"
+        if guild_db.staff_role_id and (
+            role := interaction.guild.get_role(guild_db.staff_role_id)  # pyright: ignore[reportOptionalMemberAccess]
+        ):
+            staff_role = f'"{role.name}"'
+        else:
+            staff_role = "not assigned"
         embed.add_field(
             name="┃ Filter :level_slider:",
             value=f"- {guild_db.filter.name}",
@@ -1205,6 +1293,7 @@ class Music(commands.Cog):
             value=f"- {bot_presence}",
         )
         embed.add_field(name="┃ State :notes:", value=f"- {player_state}")
+        embed.add_field(name="┃ Staff Role :technologist:", value=f"- {staff_role}")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def cog_app_command_error(
@@ -1215,9 +1304,9 @@ class Music(commands.Cog):
                 title="Server isn't whitelisted",
                 color=Color.yellow(),
             )
-        elif isinstance(error, _NotGuildOwner):
+        elif isinstance(error, (_NotGuildOwner, _NotGuildOwnerNorStaff)):
             embed = Embed(
-                title="Only the server owner is allowed to execute this command",
+                title="You aren't allowed to execute this command",
                 color=Color.yellow(),
             )
         elif isinstance(error, _HasTextChannelSet):
