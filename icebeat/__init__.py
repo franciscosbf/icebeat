@@ -28,9 +28,13 @@ async def _launch(conf: config.Config) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="IceBeat, a Discord music bot",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("-c", "--config", default="config.ini", help="config file path")
+    parser.add_argument(
+        "-c",
+        "--config",
+        default="config.ini",
+        help="config file path (default: %(default)s)",
+    )
     parser.add_argument(
         "-v",
         "--verbose",
