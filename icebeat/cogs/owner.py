@@ -1,5 +1,5 @@
 import logging
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from discord import Color, Embed, Guild
 import discord
@@ -23,17 +23,49 @@ def _cooldown() -> Callable[[commands.core.T], commands.core.T]:
     return commands.cooldown(rate=2, per=4.0, type=commands.BucketType.guild)
 
 
+def _command_extras(**kwargs) -> dict[str, Any]:
+    return kwargs
+
+
 class Owner(commands.Cog):
     __slots__ = ("_bot",)
 
     def __init__(self, bot: "IceBeat") -> None:
         self._bot = bot
 
-    @commands.command()
-    @commands.dm_only()
-    @commands.is_owner()
+    @commands.group()
     @_cooldown()
-    async def whitelist(self, ctx: commands.Context, guild: Guild = None) -> None:  # pyright: ignore[reportArgumentType]
+    @commands.is_owner()
+    @commands.dm_only()
+    async def owner(self, ctx: commands.Context) -> None:
+        if ctx.invoked_subcommand:
+            return
+
+        embed = Embed(
+            title="Available Subcommands",
+            description=f"**Usage:** {ctx.prefix if ctx.prefix else ''}{self.owner.name} <subcommand> <arguments>",
+            color=Color.green(),
+        )
+        for subcommand in self.owner.all_commands.values():
+            parameters = " ".join(
+                f"<{parameter.name}{'' if parameter.required else ' (optional)'}>"
+                for parameter in subcommand.clean_params.values()
+            )
+            embed.add_field(
+                name=f"{subcommand.extras['emoji']} ┃ {subcommand.name} {parameters}",
+                value=f"- {subcommand.description}",
+                inline=False,
+            )
+        embed.set_footer(
+            text='"server" parameter can be either its name or ID (the latter is preferred)'
+        )
+        await ctx.send(embed=embed)
+
+    @owner.command(
+        description="Whitelists a server or displays whitelisted servers",
+        extras=_command_extras(emoji=":flag_white:"),
+    )
+    async def whitelist(self, ctx: commands.Context, server: Guild = None) -> None:  # pyright: ignore[reportArgumentType]
         async def fetch_whitelist_page(current_page: int) -> tuple[Embed, int]:
             whitelist = await self._bot.store.get_whitelist()
             if not whitelist.guild_ids:
@@ -80,16 +112,17 @@ class Owner(commands.Cog):
             embed.set_footer(text=f"page {current_page}/{total_pages}")
             return embed, total_pages
 
-        if guild:
-            inserted = await self._bot.store.add_to_whitelist(guild.id)
+        if server:
+            inserted = await self._bot.store.add_to_whitelist(server.id)
             embed = Embed(color=Color.green())
             if inserted:
-                embed.description = f"Server **{guild.name}** (ID: **{guild.id}**) was inserted into the whitelist"
+                embed.title = f'Server "{server.name}" was inserted into the whitelist'
             else:
-                embed.description = f"Server **{guild.name}** (ID: **{guild.id}**) is already whitelisted"
+                embed.title = f'Server "{server.name}" is already whitelisted'
+            embed.set_footer(text=f"Server ID: {server.id}")
             await ctx.send(embed=embed)
 
-            await self._bot.add_app_commands_to_guild(guild)
+            await self._bot.add_app_commands_to_guild(server)
 
             return
 
@@ -98,46 +131,57 @@ class Owner(commands.Cog):
         )
         await pagination.navigate()
 
-    @commands.command()
-    @commands.dm_only()
-    @commands.is_owner()
-    @_cooldown()
-    async def blacklist(self, ctx: commands.Context, guild: Guild) -> None:  # pyright: ignore[reportArgumentType]
-        blacklisted = await self._bot.store.remove_from_whitelist(guild.id)
+    @owner.command(
+        description="Removes a server from the whitelist",
+        extras=_command_extras(emoji=":flag_black:"),
+    )
+    async def blacklist(self, ctx: commands.Context, server: Guild) -> None:  # pyright: ignore[reportArgumentType]
+        blacklisted = await self._bot.store.remove_from_whitelist(server.id)
+
         embed = Embed(color=Color.green())
         if blacklisted:
-            embed.description = f"Server **{guild.name}** (ID: **{guild.id}**) was removed from the whitelist"
-        else:
-            embed.description = (
-                f"Server **{guild.name}** (ID: **{guild.id}**) isn't whitelisted"
+            embed = Embed(
+                title=f'Server "{server.name}" was removed from the whitelist',
+                color=Color.green(),
             )
-        await ctx.send(embed=embed)
-
-        await self._bot.remove_app_commands_from_guild(guild)
-
-    @commands.command()
-    @commands.dm_only()
-    @commands.is_owner()
-    @_cooldown()
-    async def sync(self, ctx: commands.Context, guild: Guild) -> None:
-        whitelist = await self._bot.store.get_whitelist()
-        if guild.id not in whitelist.guild_ids:
-            embed = Embed(title="Server isn't whitelisted", color=Color.yellow())
         else:
-            await self._bot.add_app_commands_to_guild(guild)
-
-            embed = Embed(title="Commands synced with success", color=Color.green())
+            embed = Embed(
+                title=f'Server "{server.name}" isn\'t whitelisted', color=Color.yellow()
+            )
+        embed.set_footer(text=f"Server ID: {server.id}")
         await ctx.send(embed=embed)
 
-    @whitelist.error
-    @blacklist.error
-    @sync.error
-    async def guilds_error_handler(
-        self, ctx: commands.Context, error: commands.CommandError
+        await self._bot.remove_app_commands_from_guild(server)
+
+    @owner.command(
+        description="Updates slash commands of a whitelisted server",
+        extras=_command_extras(emoji=":satellite_orbital:"),
+    )
+    async def sync(self, ctx: commands.Context, server: Guild) -> None:
+        whitelist = await self._bot.store.get_whitelist()
+        if server.id in whitelist.guild_ids:
+            await self._bot.add_app_commands_to_guild(server)
+
+            embed = Embed(
+                title=f'Commands synced with success on server "{server.name}"',
+                color=Color.green(),
+            )
+        else:
+            embed = Embed(
+                title=f'Server "{server.name}" isn\'t whitelisted', color=Color.yellow()
+            )
+        embed.set_footer(text=f"Server ID: {server.id}")
+        await ctx.send(embed=embed)
+
+    async def cog_command_error(
+        self,
+        ctx: commands.Context,
+        error: Exception,
     ) -> None:
         if isinstance(error, commands.BadArgument):
             embed = Embed(
-                title="Invalid server ID or bot isn't a member", color=Color.yellow()
+                title="Invalid server name/ID or bot isn't a member of it",
+                color=Color.yellow(),
             )
         elif isinstance(error, commands.CommandOnCooldown):
             embed = Embed(
@@ -149,9 +193,7 @@ class Owner(commands.Cog):
                 title="You must provide a server name or ID",
                 color=Color.yellow(),
             )
-            embed.set_footer(
-                text="Note: I may not differentiate servers only by its name"
-            )
+            embed.set_footer(text="I may not differentiate servers only by its name")
         elif isinstance(error, (commands.PrivateMessageOnly, commands.NotOwner)):
             return
         else:
