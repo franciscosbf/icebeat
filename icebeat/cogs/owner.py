@@ -27,6 +27,10 @@ def _command_extras(**kwargs) -> dict[str, Any]:
     return kwargs
 
 
+class _SubcommandNotFound(commands.CommandError):
+    pass
+
+
 class Owner(commands.Cog):
     __slots__ = ("_bot",)
 
@@ -40,6 +44,9 @@ class Owner(commands.Cog):
     async def owner(self, ctx: commands.Context) -> None:
         if ctx.invoked_subcommand:
             return
+
+        if ctx.subcommand_passed:
+            raise _SubcommandNotFound()
 
         embed = Embed(
             title="Available Subcommands",
@@ -71,7 +78,6 @@ class Owner(commands.Cog):
             if not whitelist.guild_ids:
                 embed = Embed(
                     title="There aren't whitelisted servers",
-                    description="Use !whitelist <server name or ID> to add a server",
                     color=Color.green(),
                 )
                 return embed, 1
@@ -196,6 +202,11 @@ class Owner(commands.Cog):
             embed.set_footer(text="I may not differentiate servers only by its name")
         elif isinstance(error, (commands.PrivateMessageOnly, commands.NotOwner)):
             return
+        elif isinstance(error, _SubcommandNotFound):
+            embed = Embed(
+                title=f'No subcommand named "{ctx.subcommand_passed}"',
+                color=Color.yellow(),
+            )
         else:
             __log__.warning(f"Error on {ctx.command.name} command", exc_info=True)  # pyright: ignore[reportOptionalMemberAccess]
 

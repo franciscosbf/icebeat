@@ -6,5 +6,5 @@ CREATE TABLE IF NOT EXISTS guilds (
   auto_leave INTEGER NOT NULL DEFAULT 0,
   shuffle INTEGER NOT NULL DEFAULT 0,
   loop INTEGER NOT NULL DEFAULT 0,
-  FOREIGN KEY (id) REFERENCES whitelist (guild_id)
+  FOREIGN KEY (id) REFERENCES whitelist (guild_id) ON DELETE CASCADE
 );
