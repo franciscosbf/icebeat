@@ -208,7 +208,10 @@ class Owner(commands.Cog):
                 color=Color.yellow(),
             )
         else:
-            __log__.warning(f"Error on {ctx.command.name} command", exc_info=True)  # pyright: ignore[reportOptionalMemberAccess]
+            __log__.warning(
+                f"Error on {ctx.command.qualified_name} command",  # pyright: ignore[reportOptionalMemberAccess]
+                exc_info=True,
+            )
 
             embed = Embed(
                 title="Something unexpected went wrong...",
