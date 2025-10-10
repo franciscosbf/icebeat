@@ -2,7 +2,6 @@ import logging
 from typing import TYPE_CHECKING, Any, Callable
 
 from discord import Color, Embed, Guild
-import discord
 from discord.ext import commands
 
 from ..ui import ContextPagination
@@ -41,7 +40,7 @@ class Owner(commands.Cog):
     @_cooldown()
     @commands.is_owner()
     @commands.dm_only()
-    async def owner(self, ctx: commands.Context) -> None:
+    async def whitelist(self, ctx: commands.Context) -> None:
         if ctx.invoked_subcommand:
             return
 
@@ -50,10 +49,10 @@ class Owner(commands.Cog):
 
         embed = Embed(
             title="Available Subcommands",
-            description=f"**Usage:** {ctx.prefix if ctx.prefix else ''}{self.owner.name} <subcommand> <arguments>",
+            description=f"**Usage:** {ctx.prefix if ctx.prefix else ''}{self.whitelist.name} <subcommand> <arguments>",
             color=Color.green(),
         )
-        for subcommand in self.owner.all_commands.values():
+        for subcommand in self.whitelist.all_commands.values():
             parameters = " ".join(
                 f"<{parameter.name}{'' if parameter.required else ' (optional)'}>"
                 for parameter in subcommand.clean_params.values()
@@ -68,47 +67,46 @@ class Owner(commands.Cog):
         )
         await ctx.send(embed=embed)
 
-    @owner.command(
-        description="Whitelists a server or displays whitelisted servers",
-        extras=_command_extras(emoji=":flag_white:"),
+    @whitelist.command(
+        name="show",
+        description="Displays whitelisted servers",
+        extras=_command_extras(emoji=":clipboard:"),
     )
-    async def whitelist(self, ctx: commands.Context, server: Guild = None) -> None:  # pyright: ignore[reportArgumentType]
+    async def whitelist_show(self, ctx: commands.Context) -> None:
         async def fetch_whitelist_page(current_page: int) -> tuple[Embed, int]:
             whitelist = await self._bot.store.get_whitelist()
             if not whitelist.guild_ids:
                 embed = Embed(
                     title="There aren't whitelisted servers",
-                    color=Color.green(),
+                    color=Color.yellow(),
                 )
                 return embed, 1
             offset = (current_page - 1) * _WHITELIST_VIEW_PAGE_SIZE
-            guild_previews = []
+            guilds = []
             for guild_id in list(whitelist.guild_ids)[
                 offset : offset + _WHITELIST_VIEW_PAGE_SIZE
             ]:
-                try:
-                    guild_preview = await self._bot.fetch_guild_preview(guild_id)
-                except discord.NotFound:
-                    await self._bot.store.remove_from_whitelist(guild_id)
+                if guild := self._bot.get_guild(guild_id):
+                    guilds.append(guild)
+                    continue
 
-                    __log__.info(
-                        "Removed server %s from whitelist as bot is no longer a member",
-                        guild_id,
-                    )
+                await self._bot.store.remove_from_whitelist(guild_id)
 
-                    total_pages = ContextPagination.compute_total_pages(
-                        len(whitelist.guild_ids) - 1, _WHITELIST_VIEW_PAGE_SIZE
-                    )
-                    if total_pages < current_page:
-                        current_page = total_pages
-                    return await fetch_whitelist_page(current_page)
-                else:
-                    guild_previews.append(guild_preview)
+                __log__.info(
+                    "Removed server %s from whitelist as bot is no longer a member",
+                    guild_id,
+                )
+
+                total_pages = ContextPagination.compute_total_pages(
+                    len(whitelist.guild_ids) - 1, _WHITELIST_VIEW_PAGE_SIZE
+                )
+                if total_pages < current_page:
+                    current_page = total_pages
+                return await fetch_whitelist_page(current_page)
             embed = Embed(
-                title="Whitelisted Servers:",
+                title="Whitelisted Servers",
                 description="\n".join(
-                    f"**{guild_preview.name}** (ID: **{guild_preview.id}**)"
-                    for guild_preview in guild_previews
+                    f'- **"{guild.name}"** (**{guild.id}**)' for guild in guilds
                 ),
                 color=Color.green(),
             )
@@ -118,33 +116,41 @@ class Owner(commands.Cog):
             embed.set_footer(text=f"page {current_page}/{total_pages}")
             return embed, total_pages
 
-        if server:
-            inserted = await self._bot.store.add_to_whitelist(server.id)
-            embed = Embed(color=Color.green())
-            if inserted:
-                embed.title = f'Server "{server.name}" was inserted into the whitelist'
-            else:
-                embed.title = f'Server "{server.name}" is already whitelisted'
-            embed.set_footer(text=f"Server ID: {server.id}")
-            await ctx.send(embed=embed)
-
-            await self._bot.add_app_commands_to_guild(server)
-
-            return
-
         pagination = ContextPagination(
             _WHITELIST_VIEW_TIMEOUT, fetch_whitelist_page, ctx
         )
         await pagination.navigate()
 
-    @owner.command(
+    @whitelist.command(
+        name="add",
+        description="Whitelists a server",
+        extras=_command_extras(emoji=":flag_white:"),
+    )
+    async def whitelist_add(self, ctx: commands.Context, server: Guild) -> None:
+        inserted = await self._bot.store.add_to_whitelist(server.id)
+        if inserted:
+            await self._bot.add_app_commands_to_guild(server)
+
+            embed = Embed(
+                title=f'Server "{server.name}" was inserted into the whitelist',
+                color=Color.green(),
+            )
+        else:
+            embed = Embed(
+                title=f'Server "{server.name}" is already whitelisted',
+                color=Color.yellow(),
+            )
+        embed.set_footer(text=f"Server ID: {server.id}")
+        await ctx.send(embed=embed)
+
+    @whitelist.command(
+        name="remove",
         description="Removes a server from the whitelist",
         extras=_command_extras(emoji=":flag_black:"),
     )
-    async def blacklist(self, ctx: commands.Context, server: Guild) -> None:  # pyright: ignore[reportArgumentType]
+    async def whitelist_remove(self, ctx: commands.Context, server: Guild) -> None:  # pyright: ignore[reportArgumentType]
         blacklisted = await self._bot.store.remove_from_whitelist(server.id)
 
-        embed = Embed(color=Color.green())
         if blacklisted:
             embed = Embed(
                 title=f'Server "{server.name}" was removed from the whitelist',
@@ -159,27 +165,61 @@ class Owner(commands.Cog):
 
         await self._bot.remove_app_commands_from_guild(server)
 
-    @owner.command(
-        description="Updates slash commands of a whitelisted server",
+    @whitelist.command(
+        name="sync",
+        description="Updates slash commands for a whitelisted server or synchronizes them globally",
         extras=_command_extras(emoji=":satellite_orbital:"),
     )
-    async def sync(self, ctx: commands.Context, server: Guild) -> None:
+    async def whitelist_sync(
+        self,
+        ctx: commands.Context,
+        server: Guild = None,  # pyright: ignore[reportArgumentType]
+    ) -> None:
         whitelist = await self._bot.store.get_whitelist()
-        if server.id in whitelist.guild_ids:
-            await self._bot.add_app_commands_to_guild(server)
+        if not server:
+            if whitelist.guild_ids:
+                for guild_id in whitelist.guild_ids:
+                    if guild := self._bot.get_guild(guild_id):
+                        await self._bot.add_app_commands_to_guild(guild)
+                    else:
+                        await self._bot.store.remove_from_whitelist(guild_id)
 
-            embed = Embed(
-                title=f'Commands synced with success on server "{server.name}"',
-                color=Color.green(),
-            )
+                        __log__.info(
+                            "Removed server %s from whitelist as bot is no longer a member",
+                            guild_id,
+                        )
+
+                embed = Embed(
+                    title="Commands synced with success on all servers",
+                    color=Color.green(),
+                )
+            else:
+                embed = Embed(
+                    title="Whitelist is empty",
+                    color=Color.yellow(),
+                )
         else:
-            embed = Embed(
-                title=f'Server "{server.name}" isn\'t whitelisted', color=Color.yellow()
-            )
-        embed.set_footer(text=f"Server ID: {server.id}")
+            if server.id in whitelist.guild_ids:
+                await self._bot.add_app_commands_to_guild(server)
+
+                embed = Embed(
+                    title=f'Commands synced with success on server "{server.name}"',
+                    color=Color.green(),
+                )
+            else:
+                embed = Embed(
+                    title=f'Server "{server.name}" isn\'t whitelisted',
+                    color=Color.yellow(),
+                )
+            embed.set_footer(text=f"Server ID: {server.id}")
         await ctx.send(embed=embed)
 
-    async def cog_command_error(
+    @whitelist.error
+    @whitelist_show.error
+    @whitelist_add.error
+    @whitelist_remove.error
+    @whitelist_sync.error
+    async def whitelist_command_error(
         self,
         ctx: commands.Context,
         error: Exception,
