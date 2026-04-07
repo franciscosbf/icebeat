@@ -1,6 +1,4 @@
 __pycache__/
 build/
 *.egg-info/
-*.db
-*.ini
-/lavalink/
+/dev/
