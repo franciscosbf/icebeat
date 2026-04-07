@@ -252,11 +252,11 @@ class _LavalinkVoiceClient(VoiceProtocol):
         self.channel: VoiceChannel = self.client.get_channel(channel_id)  # pyright: ignore[reportAttributeAccessIssue, reportIncompatibleVariableOverride]
 
         payload = {"t": "VOICE_STATE_UPDATE", "d": data}
-        await self._lavalink_client.voice_update_handler(payload)
+        await self._lavalink_client.voice_update_handler(payload)  # pyright: ignore[reportArgumentType]
 
     async def on_voice_server_update(self, data: VoiceServerUpdatePayload) -> None:
         payload = {"t": "VOICE_SERVER_UPDATE", "d": data}
-        await self._lavalink_client.voice_update_handler(payload)
+        await self._lavalink_client.voice_update_handler(payload)  # pyright: ignore[reportArgumentType]
 
     async def connect(
         self,
@@ -999,7 +999,7 @@ class Music(commands.Cog):
             embed.set_footer(text=text)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(description="Lists queue")
+    @app_commands.command(description="Lists queued tracks")
     @app_commands.guild_only()
     @_ensure_player_is_ready()
     @_bot_has_permissions()
