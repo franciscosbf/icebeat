@@ -7,28 +7,38 @@ from .store import Cache
 
 __all__ = ["TimedCache"]
 
+_DEFAULT_ENTRIES = 100
+_DEFAULT_TTL = 3600
+
 
 class TimedCache(Cache):
-    def __init__(self, entries: int, ttl: int) -> None:
-        self.cache = TTLCache(entries, ttl)
+    __slots__ = ("_cache",)
+
+    def __init__(self, entries: Optional[int], ttl: Optional[int]) -> None:
+        if not entries:
+            entries = _DEFAULT_ENTRIES
+        if not ttl:
+            ttl = _DEFAULT_TTL
+
+        self._cache = TTLCache(entries, ttl)
 
     def _pop(self, key: Any) -> None:
-        self.cache.pop(key, default=None)
+        self._cache.pop(key, default=None)
 
     def get_guild(self, guild_id: int) -> Optional[Guild]:
-        self.cache.get(guild_id, None)
+        self._cache.get(guild_id, None)
 
     def set_guild(self, guild: Guild) -> None:
-        self.cache[guild.id] = guild
+        self._cache[guild.id] = guild
 
     def invalidate_guild(self, guild_id: int) -> None:
         self._pop(guild_id)
 
     def get_whitelist(self) -> Optional[Whitelist]:
-        self.cache.get("whitelist", None)
+        self._cache.get("whitelist", None)
 
     def set_whitelist(self, whitelist: Whitelist) -> None:
-        self.cache["whitelist"] = whitelist
+        self._cache["whitelist"] = whitelist
 
     def invalidate_whitelist(self) -> None:
         self._pop("whitelist")

@@ -2,6 +2,7 @@ from abc import ABC
 from dataclasses import dataclass, fields
 from configparser import ConfigParser, SectionProxy
 from pathlib import Path
+from typing import Optional, get_args
 
 __all__ = ["Bot", "Lavalink", "Database", "Config", "parse"]
 
@@ -27,8 +28,8 @@ class Lavalink(_Section):
 
 @dataclass
 class Cache(_Section):
-    entries: int
-    ttl: int
+    entries: Optional[int] = None
+    ttl: Optional[int] = None
 
 
 @dataclass
@@ -40,8 +41,8 @@ class Database(_Section):
 class Config:
     bot: Bot
     lavalink: Lavalink
-    cache: Cache
     database: Database
+    cache: Optional[Cache] = None
 
 
 def _read(path: Path) -> ConfigParser:
@@ -57,7 +58,9 @@ def _extract_section(section_proxy: SectionProxy, section: type[_Section]) -> _S
     kwargs = {}
 
     for field in fields(section):
-        if field.name not in section_proxy:
+        if field.default is None:
+            continue
+        elif field.name not in section_proxy:
             raise ValueError(
                 f"missing field {field.name} in section {section_proxy.name}"
             )
@@ -75,7 +78,10 @@ def _extract_config(config_parser: ConfigParser) -> Config:
     kwargs = {}
 
     for field in fields(Config):
-        if field.name not in config_parser:
+        if field.default is None:
+            kwargs[field.name] = get_args(field.type)[0]()
+            continue
+        elif field.name not in config_parser:
             raise ValueError(f"missing config section {field.name}")
         section_proxy = config_parser[field.name]
         kwargs[field.name] = _extract_section(section_proxy, field.type)  # pyright: ignore reportArgumentType
