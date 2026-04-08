@@ -39,7 +39,7 @@ _SEEK_TIME_RE = re.compile(
     r"^(((?P<hours>[1-9]\d*):(?P<mins_h>\d{2}))|(?P<mins_m>[1-9]{0,1}\d)):(?P<secs>\d{2})$"
 )
 _QUERY_SEARCH_FMT = "ytsearch:{}"
-_MAX_SEARCHED_TRACKS = 6
+_MAX_SEARCH_RESULTS = 6
 _DEFAULT_USER_PERMISSIONS = Permissions(
     connect=True,
     use_application_commands=True,
@@ -211,12 +211,10 @@ class _HasTextEnabledAndNotSet(app_commands.CheckFailure):
     pass
 
 
-def _bot_has_permissions() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
-    return app_commands.checks.bot_has_permissions(
-        connect=True,
-        speak=True,
-        send_messages=True,
-    )
+def _bot_has_permissions(
+    **perms: bool,
+) -> Callable[[app_commands.checks.T], app_commands.checks.T]:
+    return app_commands.checks.bot_has_permissions(**perms)
 
 
 def _prettify_missing_bot_permissions(error: app_commands.BotMissingPermissions) -> str:
@@ -626,7 +624,10 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
+    @_bot_has_permissions(
+        connect=True,
+        speak=True,
+    )
     @_cooldown()
     @_ensure_player_is_ready()
     async def play(self, interaction: Interaction, query: str) -> None:
@@ -663,7 +664,7 @@ class Music(commands.Cog):
             await interaction.followup.send(embed=embed)
             return
         elif result.load_type == lavalink.LoadType.SEARCH:
-            for i in range(min(len(result.tracks), _MAX_SEARCHED_TRACKS)):
+            for i in range(min(len(result.tracks), _MAX_SEARCH_RESULTS)):
                 if result.tracks[i].title == query:
                     tracks = [result.tracks[i]]
                     break
@@ -758,7 +759,7 @@ class Music(commands.Cog):
             return []
 
         tracks = result.tracks
-        max_searches = min(len(tracks), _MAX_SEARCHED_TRACKS)
+        max_searches = min(len(tracks), _MAX_SEARCH_RESULTS)
         return [
             app_commands.Choice(name=tracks[i].title, value=tracks[i].title)
             for i in range(max_searches)
@@ -768,7 +769,10 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
+    @_bot_has_permissions(
+        connect=True,
+        speak=True,
+    )
     @_cooldown()
     @_is_playing()
     @_ensure_player_is_ready()
@@ -789,7 +793,10 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
+    @_bot_has_permissions(
+        connect=True,
+        speak=True,
+    )
     @_cooldown()
     @_is_playing()
     @_ensure_player_is_ready()
@@ -810,7 +817,10 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
+    @_bot_has_permissions(
+        connect=True,
+        speak=True,
+    )
     @_cooldown()
     @_is_playing()
     @_ensure_player_is_ready()
@@ -833,7 +843,10 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
+    @_bot_has_permissions(
+        connect=True,
+        speak=True,
+    )
     @_cooldown()
     @_ensure_player_is_ready()
     async def jump(
@@ -878,7 +891,10 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
+    @_bot_has_permissions(
+        connect=True,
+        speak=True,
+    )
     @_cooldown()
     @_ensure_player_is_ready()
     async def pop(
@@ -942,7 +958,10 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
+    @_bot_has_permissions(
+        connect=True,
+        speak=True,
+    )
     @_cooldown()
     @_is_playing()
     @_ensure_player_is_ready()
@@ -985,7 +1004,10 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
+    @_bot_has_permissions(
+        connect=True,
+        speak=True,
+    )
     @_cooldown()
     @_is_playing()
     @_ensure_player_is_ready()
@@ -1022,7 +1044,6 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_ensure_player_is_ready(bypass_presence_check=True)
     async def queue(self, interaction: Interaction) -> None:
@@ -1036,7 +1057,6 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
@@ -1063,7 +1083,6 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_ensure_player_is_ready()
     async def leave(self, interaction: Interaction) -> None:
@@ -1073,7 +1092,7 @@ class Music(commands.Cog):
         await self._disconnect_bot(player, voice_client)
 
         embed = Embed(
-            title=f"Bot has been disconnected from <#{voice_client.channel.id}>",
+            title=f"Bot disconnected from <#{voice_client.channel.id}>",
             color=Color.green(),
         )
         await interaction.response.send_message(embed=embed)
@@ -1082,7 +1101,6 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
@@ -1104,7 +1122,6 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
@@ -1127,7 +1144,6 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
@@ -1149,7 +1165,6 @@ class Music(commands.Cog):
     @app_commands.describe(filter="filter name")
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
@@ -1183,7 +1198,6 @@ class Music(commands.Cog):
     )
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
     async def presence_stay(self, interaction: Interaction) -> None:
@@ -1201,7 +1215,6 @@ class Music(commands.Cog):
     )
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
     async def presence_leave(self, interaction: Interaction) -> None:
@@ -1213,6 +1226,9 @@ class Music(commands.Cog):
         voice_client = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess]
         if voice_client:
             await voice_client.disconnect(force=True)
+
+        if not interaction.permissions.send_messages:
+            return
 
         embed = Embed(title="Leave mode has been activated", color=Color.green())
         await interaction.response.send_message(embed=embed)
@@ -1231,7 +1247,6 @@ class Music(commands.Cog):
     @app_commands.describe(role="staff role")
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner()
     async def staff_set(self, interaction: Interaction, role: Role) -> None:
@@ -1251,7 +1266,6 @@ class Music(commands.Cog):
     )
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner()
     async def staff_unset(self, interaction: Interaction) -> None:
@@ -1270,7 +1284,6 @@ class Music(commands.Cog):
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
-    @_bot_has_permissions()
     @_cooldown()
     async def player(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
