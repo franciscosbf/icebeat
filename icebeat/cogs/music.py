@@ -120,11 +120,11 @@ _FILTER_PRESETS = {
     ),
     Filter.eightd: lavalink.Rotation(rotation_hz=0.2),
     Filter.karaoke: lavalink.Karaoke(),
-    Filter.vaporwave: [
+    Filter.vaporwave: (
         lavalink.Equalizer(gains=[0.3, 0.3]),
         lavalink.Timescale(pitch=0.5),
         lavalink.Tremolo(frequency=14, depth=0.3),
-    ],
+    ),
 }
 
 
@@ -217,6 +217,23 @@ def _bot_has_permissions() -> Callable[[app_commands.checks.T], app_commands.che
         speak=True,
         send_messages=True,
     )
+
+
+def _prettify_missing_bot_permissions(error: app_commands.BotMissingPermissions) -> str:
+    perms = [
+        f"_{perm.replace('_', ' ').replace('guild', 'server')}_"
+        for perm in error.missing_permissions
+    ]
+    nperms = len(perms)
+
+    if nperms == 1:
+        fmted_perms = perms[0]
+    elif nperms == 2:
+        fmted_perms = f"{perms[0]} and {perms[1]}"
+    else:
+        fmted_perms = f"{', '.join(perms[:-1])} and {perms[-1]}"
+
+    return fmted_perms
 
 
 class _LavalinkVoiceClient(VoiceProtocol):
@@ -600,13 +617,15 @@ class Music(commands.Cog):
                 await self._disconnect_bot(player, voice_client)
 
     @app_commands.command(description="Request something to play")
-    @app_commands.describe(query="link or normal search as if you were on YouTube")
+    @app_commands.describe(
+        query="Youtube/Spotify link or normal search as if you were on YouTube"
+    )
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_ensure_player_is_ready()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_ensure_player_is_ready()
     async def play(self, interaction: Interaction, query: str) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -700,7 +719,6 @@ class Music(commands.Cog):
             await player.play()
 
     @play.autocomplete("query")
-    @_is_whitelisted()
     async def query_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
@@ -746,11 +764,11 @@ class Music(commands.Cog):
     @app_commands.command(description="Stops the player")
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_is_playing()
-    @_ensure_player_is_ready()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_is_playing()
+    @_ensure_player_is_ready()
     async def pause(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -767,11 +785,11 @@ class Music(commands.Cog):
     @app_commands.command(description="Resumes the player")
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_is_playing()
-    @_ensure_player_is_ready()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_is_playing()
+    @_ensure_player_is_ready()
     async def resume(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -788,11 +806,11 @@ class Music(commands.Cog):
     @app_commands.command(description="Skips current track")
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_is_playing()
-    @_ensure_player_is_ready()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_is_playing()
+    @_ensure_player_is_ready()
     async def skip(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -807,14 +825,14 @@ class Music(commands.Cog):
         )
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(description="Jumps to a given enqueued track")
+    @app_commands.command(description="Skips to a given queued track")
     @app_commands.describe(position="track position in queue")
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_ensure_player_is_ready()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_ensure_player_is_ready()
     async def jump(
         self,
         interaction: Interaction,
@@ -856,10 +874,10 @@ class Music(commands.Cog):
     @app_commands.describe(position="track position in queue")
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_ensure_player_is_ready()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_ensure_player_is_ready()
     async def pop(
         self,
         interaction: Interaction,
@@ -896,8 +914,6 @@ class Music(commands.Cog):
 
     @jump.autocomplete("position")
     @pop.autocomplete("position")
-    @_bot_has_permissions()
-    @_is_whitelisted()
     async def position_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[int]]:
@@ -918,15 +934,15 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Seeks to a given position in the track")
     @app_commands.describe(
-        position="track position like in the YouTube video player, like 5:38"
+        position="track position like in the YouTube video player, for example 5:38"
     )
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_is_playing()
-    @_ensure_player_is_ready()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_is_playing()
+    @_ensure_player_is_ready()
     async def seek(
         self,
         interaction: Interaction,
@@ -965,11 +981,11 @@ class Music(commands.Cog):
     @app_commands.command(description="Displays current track")
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_is_playing()
-    @_ensure_player_is_ready()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_is_playing()
+    @_ensure_player_is_ready()
     async def current(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -1001,10 +1017,11 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Lists queued tracks")
     @app_commands.guild_only()
-    @_ensure_player_is_ready()
+    @_default_user_permissions()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_ensure_player_is_ready()
     async def queue(self, interaction: Interaction) -> None:
         _ = interaction
         # TODO: implement
@@ -1014,10 +1031,11 @@ class Music(commands.Cog):
 
     @app_commands.command(description="Removes all queued tracks")
     @app_commands.guild_only()
-    @_ensure_player_is_ready()
+    @_default_user_permissions()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_ensure_player_is_ready()
     async def wipe(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -1040,10 +1058,10 @@ class Music(commands.Cog):
     @app_commands.command(description="Forces me to disconnect from the voice channel")
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_ensure_player_is_ready()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
+    @_ensure_player_is_ready()
     async def leave(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -1059,10 +1077,10 @@ class Music(commands.Cog):
     @app_commands.command(description="Toggles queue's shuffle mode")
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_bot_has_permissions()
-    @_is_guild_owner_or_staff()
-    @_cooldown()
     @_is_whitelisted()
+    @_bot_has_permissions()
+    @_cooldown()
+    @_is_guild_owner_or_staff()
     async def shuffle(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
@@ -1081,10 +1099,10 @@ class Music(commands.Cog):
     @app_commands.command(description="Toggles queue's loop mode")
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_bot_has_permissions()
-    @_is_guild_owner_or_staff()
-    @_cooldown()
     @_is_whitelisted()
+    @_bot_has_permissions()
+    @_cooldown()
+    @_is_guild_owner_or_staff()
     async def loop(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
@@ -1104,10 +1122,10 @@ class Music(commands.Cog):
     @app_commands.describe(level="volume level (the higher, the worst)")
     @app_commands.guild_only()
     @_default_user_permissions()
-    @_bot_has_permissions()
-    @_is_guild_owner_or_staff()
-    @_cooldown()
     @_is_whitelisted()
+    @_bot_has_permissions()
+    @_cooldown()
+    @_is_guild_owner_or_staff()
     async def volume(
         self, interaction: Interaction, level: app_commands.Range[int, 0, 100]
     ) -> None:
@@ -1126,10 +1144,10 @@ class Music(commands.Cog):
     @app_commands.rename(filter="name")
     @app_commands.describe(filter="filter name")
     @_default_user_permissions()
-    @_bot_has_permissions()
-    @_is_guild_owner_or_staff()
-    @_cooldown()
     @_is_whitelisted()
+    @_bot_has_permissions()
+    @_cooldown()
+    @_is_guild_owner_or_staff()
     async def filter(
         self,
         interaction: Interaction,
@@ -1160,10 +1178,10 @@ class Music(commands.Cog):
         description="Bot won’t leave the voice channel when the queue's empty",
     )
     @_default_user_permissions()
-    @_bot_has_permissions()
-    @_is_guild_owner_or_staff()
-    @_cooldown()
     @_is_whitelisted()
+    @_bot_has_permissions()
+    @_cooldown()
+    @_is_guild_owner_or_staff()
     async def presence_stay(self, interaction: Interaction) -> None:
         await self._bot.store.set_guild_auto_leave(
             interaction.guild_id,  # pyright: ignore[reportArgumentType]
@@ -1178,10 +1196,10 @@ class Music(commands.Cog):
         description="Bot will leave the voice channel when the queue's empty",
     )
     @_default_user_permissions()
-    @_bot_has_permissions()
-    @_is_guild_owner_or_staff()
-    @_cooldown()
     @_is_whitelisted()
+    @_bot_has_permissions()
+    @_cooldown()
+    @_is_guild_owner_or_staff()
     async def presence_leave(self, interaction: Interaction) -> None:
         await self._bot.store.set_guild_auto_leave(
             interaction.guild_id,  # pyright: ignore[reportArgumentType]
@@ -1208,10 +1226,10 @@ class Music(commands.Cog):
     )
     @app_commands.describe(role="staff role")
     @_default_user_permissions()
-    @_bot_has_permissions()
-    @_is_guild_owner()
-    @_cooldown()
     @_is_whitelisted()
+    @_bot_has_permissions()
+    @_cooldown()
+    @_is_guild_owner()
     async def staff_set(self, interaction: Interaction, role: Role) -> None:
         await self._bot.store.set_guild_staff_role_id(
             interaction.guild_id,  # pyright: ignore[reportArgumentType]
@@ -1228,10 +1246,10 @@ class Music(commands.Cog):
         description="Removes staff role (only the server owner will be allowed to configure the player)",
     )
     @_default_user_permissions()
-    @_bot_has_permissions()
-    @_is_guild_owner()
-    @_cooldown()
     @_is_whitelisted()
+    @_bot_has_permissions()
+    @_cooldown()
+    @_is_guild_owner()
     async def staff_unset(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
@@ -1247,9 +1265,9 @@ class Music(commands.Cog):
     @app_commands.command(description="Displays player info")
     @app_commands.guild_only()
     @_default_user_permissions()
+    @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_is_whitelisted()
     async def player(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
@@ -1322,19 +1340,9 @@ class Music(commands.Cog):
                 color=Color.yellow(),
             )
         elif isinstance(error, app_commands.BotMissingPermissions):
-            perms = [
-                f"_{perm.replace('_', ' ').replace('guild', 'server')}_"
-                for perm in error.missing_permissions
-            ]
-            nperms = len(perms)
-            if nperms == 1:
-                fmted_perms = perms[0]
-            elif nperms == 2:
-                fmted_perms = f"{perms[0]} and {perms[1]}"
-            else:
-                fmted_perms = f"{', '.join(perms[:-1])} and {perms[-1]}"
+            fmted_perms = _prettify_missing_bot_permissions(error)
             embed = Embed(
-                title="I lack some capabilities",
+                title="Bot has missing required permissions",
                 description=f"**Missing permissions:** {fmted_perms}",
                 color=Color.yellow(),
             )
