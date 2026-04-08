@@ -6,14 +6,14 @@ __all__ = ["Filter", "Guild"]
 
 
 class Filter(Enum):
-    normal = 0
-    bassboost = 1
-    pop = 2
-    soft = 3
-    treblebass = 4
-    eightd = 5
-    karaoke = 6
-    vaporwave = 7
+    normal = 1 << 0
+    bassboost = 1 << 1
+    pop = 1 << 2
+    soft = 1 << 3
+    treblebass = 1 << 4
+    eightd = 1 << 5
+    karaoke = 1 << 6
+    vaporwave = 1 << 7
 
 
 @dataclass
