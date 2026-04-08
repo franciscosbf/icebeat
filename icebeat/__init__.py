@@ -1,7 +1,7 @@
 import argparse
-import asyncio
-import aiosqlite
 
+import aiosqlite
+import uvloop
 
 from .logger import setup_logger
 from .cache import TimedCache
@@ -54,7 +54,7 @@ def main() -> None:
     setup_logger(args.verbose, args.debug)
 
     try:
-        asyncio.run(_launch(conf))
+        uvloop.run(_launch(conf))
     except KeyboardInterrupt:
         pass
     except Exception as e:

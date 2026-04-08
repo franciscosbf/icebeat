@@ -17,6 +17,7 @@ dependencies = [
   "cachetools==6.1.0",
   "aiosqlite==0.21.0",
   "colorlog==6.9.0",
+  "uvloop==0.22.1",
 ]
 keywords = ["discord", "bot", "music"]
 classifiers = [
