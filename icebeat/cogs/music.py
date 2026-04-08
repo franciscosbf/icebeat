@@ -335,7 +335,7 @@ class _VoiceChannelIsFull(app_commands.CheckFailure):
     pass
 
 
-def _loop_mode(loop: bool) -> int:
+def _parse_loop_mode(loop: bool) -> int:
     return (
         lavalink.DefaultPlayer.LOOP_QUEUE if loop else lavalink.DefaultPlayer.LOOP_NONE
     )
@@ -353,9 +353,9 @@ async def _set_filter_preset(player: lavalink.DefaultPlayer, filter: Filter) -> 
         await player.set_filter(filter_preset)
 
 
-def _ensure_player_is_ready() -> Callable[
-    [app_commands.checks.T], app_commands.checks.T
-]:
+def _ensure_player_is_ready(
+    bypass_presence_check: bool = False,
+) -> Callable[[app_commands.checks.T], app_commands.checks.T]:
     async def predicate(interaction: Interaction) -> bool:
         bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
@@ -366,6 +366,9 @@ def _ensure_player_is_ready() -> Callable[
             )
         except Exception as e:
             raise _FailedToRetrievePlayer(e)
+
+        if bypass_presence_check:
+            return True
 
         bot_voice_client = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess]
 
@@ -389,7 +392,7 @@ def _ensure_player_is_ready() -> Callable[
             except Exception as e:
                 raise _FailedToPreparePlayer(e)
             player.set_shuffle(guild_db.shuffle)
-            player.set_loop(_loop_mode(guild_db.loop))
+            player.set_loop(_parse_loop_mode(guild_db.loop))
 
             await member_voice_channel.connect(cls=_LavalinkVoiceClient, self_deaf=True)
 
@@ -616,7 +619,7 @@ class Music(commands.Cog):
             if len(voice_states) == 1 and self._bot.user.id in voice_states:  # pyright: ignore[reportOptionalMemberAccess]
                 await self._disconnect_bot(player, voice_client)
 
-    @app_commands.command(description="Request something to play")
+    @app_commands.command(description="Requests something to play")
     @app_commands.describe(
         query="Youtube/Spotify link or normal search as if you were on YouTube"
     )
@@ -1021,7 +1024,7 @@ class Music(commands.Cog):
     @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_ensure_player_is_ready()
+    @_ensure_player_is_ready(bypass_presence_check=True)
     async def queue(self, interaction: Interaction) -> None:
         _ = interaction
         # TODO: implement
@@ -1035,7 +1038,8 @@ class Music(commands.Cog):
     @_is_whitelisted()
     @_bot_has_permissions()
     @_cooldown()
-    @_ensure_player_is_ready()
+    @_is_guild_owner_or_staff()
+    @_ensure_player_is_ready(bypass_presence_check=True)
     async def wipe(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -1049,7 +1053,7 @@ class Music(commands.Cog):
             ephemeral = False
         else:
             embed = Embed(
-                title="There are no queued tracks",
+                title="There aren't queued tracks",
                 color=Color.green(),
             )
             ephemeral = True
@@ -1081,14 +1085,14 @@ class Music(commands.Cog):
     @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
+    @_ensure_player_is_ready(bypass_presence_check=True)
     async def shuffle(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
         shuffle = await self._bot.store.switch_guild_shuffle(guild_id)
 
-        player = self._get_player(interaction)
-        if player:
-            player.set_shuffle(shuffle)
+        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player.set_shuffle(shuffle)
 
         embed = Embed(
             title=f"Shuffle mode has been {'enabled' if shuffle else 'disabled'}",
@@ -1103,14 +1107,14 @@ class Music(commands.Cog):
     @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
+    @_ensure_player_is_ready(bypass_presence_check=True)
     async def loop(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
         loop = await self._bot.store.switch_guild_shuffle(guild_id)
 
-        player = self._get_player(interaction)
-        if player:
-            player.set_loop(_loop_mode(loop))
+        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player.set_loop(_parse_loop_mode(loop))
 
         embed = Embed(
             title=f"Loop mode has been {'enabled' if loop else 'disabled'}",
@@ -1126,6 +1130,7 @@ class Music(commands.Cog):
     @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
+    @_ensure_player_is_ready(bypass_presence_check=True)
     async def volume(
         self, interaction: Interaction, level: app_commands.Range[int, 0, 100]
     ) -> None:
@@ -1133,9 +1138,8 @@ class Music(commands.Cog):
 
         await self._bot.store.set_guild_volume(guild_id, volume=level)
 
-        player = self._get_player(interaction)
-        if player:
-            await player.set_volume(vol=level)
+        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        await player.set_volume(vol=level)
 
         embed = Embed(title="Volume has been changed", color=Color.green())
         await interaction.response.send_message(embed=embed)
@@ -1148,6 +1152,7 @@ class Music(commands.Cog):
     @_bot_has_permissions()
     @_cooldown()
     @_is_guild_owner_or_staff()
+    @_ensure_player_is_ready(bypass_presence_check=True)
     async def filter(
         self,
         interaction: Interaction,
@@ -1157,9 +1162,8 @@ class Music(commands.Cog):
 
         await self._bot.store.set_guild_filter(guild_id, filter)
 
-        player = self._get_player(interaction)
-        if player:
-            await _set_filter_preset(player, filter)
+        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        await _set_filter_preset(player, filter)
 
         embed = Embed(
             title=f"Filter has been changed to {filter.name}", color=Color.green()
