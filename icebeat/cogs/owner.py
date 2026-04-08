@@ -14,8 +14,9 @@ __all__ = ["Owner"]
 
 __log__ = logging.getLogger(__name__)
 
-_WHITELIST_VIEW_TIMEOUT = 20.0
+_WHITELIST_VIEW_TIMEOUT = 15.0
 _WHITELIST_VIEW_PAGE_SIZE = 6
+_WHITELIST_DELETE_AFTER = 20.0
 
 
 def _cooldown() -> Callable[[commands.core.T], commands.core.T]:
@@ -28,6 +29,76 @@ def _command_extras(**kwargs) -> dict[str, Any]:
 
 class _SubcommandNotFound(commands.CommandError):
     pass
+
+
+class _WhitelistPage:
+    __slots__ = ("_bot", "_prev_whitelist_len")
+
+    def __init__(self, bot: "IceBeat", prev_whitelist_len: int) -> None:
+        self._bot = bot
+        self._prev_whitelist_len = prev_whitelist_len
+
+    @classmethod
+    async def create(cls, bot: "IceBeat"):
+        prev_whitelist_len = len((await bot.store.get_whitelist()).guild_ids)
+
+        return cls(bot, prev_whitelist_len)
+
+    async def fetch(self, current_page: int) -> tuple[Embed, int, int]:
+        whitelist = await self._bot.store.get_whitelist()
+        if not whitelist.guild_ids:
+            embed = Embed(
+                title="There aren't whitelisted servers",
+                color=Color.yellow(),
+            )
+            return embed, 1, 1
+        whitelist_len = len(whitelist.guild_ids)
+        whitelist_update_warning = ""
+        if whitelist_len < self._prev_whitelist_len:
+            if current_page > 1:
+                whitelist_update_warning = (
+                    " (back to page 1 since whitelist was updated)"
+                )
+            current_page = 1
+        self._prev_whitelist_len = whitelist_len
+        offset = (current_page - 1) * _WHITELIST_VIEW_PAGE_SIZE
+        guilds = []
+        for guild_id in list(whitelist.guild_ids)[
+            offset : offset + _WHITELIST_VIEW_PAGE_SIZE
+        ]:
+            if guild := self._bot.get_guild(guild_id):
+                guilds.append(guild)
+                continue
+
+            await self._bot.store.remove_from_whitelist(guild_id)
+
+            __log__.info(
+                "Removed server %s from whitelist as bot is no longer a member",
+                guild_id,
+            )
+
+            total_pages = ContextPagination.compute_total_pages(
+                len(whitelist.guild_ids) - 1, _WHITELIST_VIEW_PAGE_SIZE
+            )
+            if total_pages < current_page:
+                current_page = total_pages
+            return await self.fetch(current_page)
+        embed = Embed(
+            title="Whitelisted Servers",
+            description="\n".join(
+                f'- **"{guild.name}"** (**{guild.id}**)' for guild in guilds
+            ),
+            color=Color.green(),
+        )
+        if whitelist_update_warning:
+            embed.set_footer(text=whitelist_update_warning)
+        total_pages = ContextPagination.compute_total_pages(
+            len(whitelist.guild_ids), _WHITELIST_VIEW_PAGE_SIZE
+        )
+        embed.set_footer(
+            text=f"page {current_page}/{total_pages}{whitelist_update_warning}"
+        )
+        return embed, current_page, total_pages
 
 
 class Owner(commands.Cog):
@@ -65,7 +136,7 @@ class Owner(commands.Cog):
         embed.set_footer(
             text='"server" parameter can be either its name or ID (the latter is preferred)'
         )
-        await ctx.send(embed=embed)
+        await ctx.reply(embed=embed)
 
     @whitelist.command(
         name="show",
@@ -73,51 +144,10 @@ class Owner(commands.Cog):
         extras=_command_extras(emoji=":clipboard:"),
     )
     async def whitelist_show(self, ctx: commands.Context) -> None:
-        async def fetch_whitelist_page(current_page: int) -> tuple[Embed, int]:
-            whitelist = await self._bot.store.get_whitelist()
-            if not whitelist.guild_ids:
-                embed = Embed(
-                    title="There aren't whitelisted servers",
-                    color=Color.yellow(),
-                )
-                return embed, 1
-            offset = (current_page - 1) * _WHITELIST_VIEW_PAGE_SIZE
-            guilds = []
-            for guild_id in list(whitelist.guild_ids)[
-                offset : offset + _WHITELIST_VIEW_PAGE_SIZE
-            ]:
-                if guild := self._bot.get_guild(guild_id):
-                    guilds.append(guild)
-                    continue
-
-                await self._bot.store.remove_from_whitelist(guild_id)
-
-                __log__.info(
-                    "Removed server %s from whitelist as bot is no longer a member",
-                    guild_id,
-                )
-
-                total_pages = ContextPagination.compute_total_pages(
-                    len(whitelist.guild_ids) - 1, _WHITELIST_VIEW_PAGE_SIZE
-                )
-                if total_pages < current_page:
-                    current_page = total_pages
-                return await fetch_whitelist_page(current_page)
-            embed = Embed(
-                title="Whitelisted Servers",
-                description="\n".join(
-                    f'- **"{guild.name}"** (**{guild.id}**)' for guild in guilds
-                ),
-                color=Color.green(),
-            )
-            total_pages = ContextPagination.compute_total_pages(
-                len(whitelist.guild_ids), _WHITELIST_VIEW_PAGE_SIZE
-            )
-            embed.set_footer(text=f"page {current_page}/{total_pages}")
-            return embed, total_pages
+        whitelist_page = await _WhitelistPage.create(self._bot)
 
         pagination = ContextPagination(
-            _WHITELIST_VIEW_TIMEOUT, fetch_whitelist_page, ctx
+            _WHITELIST_VIEW_TIMEOUT, whitelist_page.fetch, ctx, _WHITELIST_DELETE_AFTER
         )
         await pagination.navigate()
 
@@ -141,7 +171,7 @@ class Owner(commands.Cog):
                 color=Color.yellow(),
             )
         embed.set_footer(text=f"Server ID: {server.id}")
-        await ctx.send(embed=embed)
+        await ctx.reply(embed=embed)
 
     @whitelist.command(
         name="remove",
@@ -161,7 +191,7 @@ class Owner(commands.Cog):
                 title=f'Server "{server.name}" isn\'t whitelisted', color=Color.yellow()
             )
         embed.set_footer(text=f"Server ID: {server.id}")
-        await ctx.send(embed=embed)
+        await ctx.reply(embed=embed)
 
         await self._bot.remove_app_commands_from_guild(server)
 
@@ -212,7 +242,7 @@ class Owner(commands.Cog):
                     color=Color.yellow(),
                 )
             embed.set_footer(text=f"Server ID: {server.id}")
-        await ctx.send(embed=embed)
+        await ctx.reply(embed=embed)
 
     @whitelist.error
     @whitelist_show.error
@@ -257,4 +287,4 @@ class Owner(commands.Cog):
                 title="Something unexpected went wrong...",
                 color=Color.red(),
             )
-        await ctx.send(embed=embed)
+        await ctx.reply(embed=embed)

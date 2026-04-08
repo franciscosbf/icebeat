@@ -12,22 +12,29 @@ __all__ = ["FetchPage", "ContextPagination", "InteractionPagination"]
 __log__ = logging.getLogger(__name__)
 
 
-FetchPage = Callable[[int], Coroutine[None, None, tuple[Embed, int]]]
+FetchPage = Callable[[int], Coroutine[None, None, tuple[Embed, int, int]]]
 
 
 class _BasePagination(ABC, View):
-    __slots__ = ("_fetch_page", "_current_page", "_total_pages")
+    __slots__ = ("_delete_after", "_fetch_page", "_current_page", "_total_pages")
 
-    def __init__(self, timeout: float, fetch_page: FetchPage):
+    def __init__(
+        self, timeout: float, delete_after: Optional[float], fetch_page: FetchPage
+    ):
         super().__init__(timeout=timeout)
 
+        self._delete_after = delete_after
         self._fetch_page = fetch_page
         self._current_page = 1
         self._total_pages = 1
 
     @abstractmethod
     async def _send_message(
-        self, *, embed: Embed, view: Optional[View] = None
+        self,
+        *,
+        embed: Embed,
+        view: Optional[View] = None,
+        delete_after: Optional[float],
     ) -> None: ...
 
     @abstractmethod
@@ -38,7 +45,9 @@ class _BasePagination(ABC, View):
         self.children[1].disabled = self._current_page == self._total_pages  # pyright: ignore[reportAttributeAccessIssue]
 
     async def _edit_page(self, interaction: Interaction):
-        emb, self._total_pages = await self._fetch_page(self._current_page)
+        emb, self._current_page, self._total_pages = await self._fetch_page(
+            self._current_page
+        )
 
         self._update_buttons()
 
@@ -71,22 +80,21 @@ class _BasePagination(ABC, View):
         await interaction.response.edit_message(embed=embed, view=None)
 
     async def navigate(self):
-        embed, self._total_pages = await self._fetch_page(self._current_page)
-        assert self._total_pages > 0, (
-            "total_pages returned by fetch_page must be greater than zero"
+        embed, self._current_page, self._total_pages = await self._fetch_page(
+            self._current_page
         )
+
         if self._total_pages == 1:
-            await self._send_message(embed=embed)
+            await self._send_message(embed=embed, delete_after=self._delete_after)
         elif self._total_pages > 1:
             self._update_buttons()
 
-            await self._send_message(embed=embed, view=self)
+            await self._send_message(
+                embed=embed, view=self, delete_after=self._delete_after
+            )
 
     @staticmethod
     def compute_total_pages(total_elements: int, elements_per_page: int) -> int:
-        assert total_elements > 0, "total_elements must be greater than zero"
-        assert elements_per_page > 0, "elements_per_page must be greater than zero"
-
         return ((total_elements - 1) // elements_per_page) + 1
 
 
@@ -94,9 +102,13 @@ class ContextPagination(_BasePagination):
     __slots__ = ("_ctx", "_msg")
 
     def __init__(
-        self, timeout: float, fetch_page: FetchPage, ctx: commands.Context
+        self,
+        timeout: float,
+        fetch_page: FetchPage,
+        ctx: commands.Context,
+        delete_after: Optional[float] = None,
     ) -> None:
-        super().__init__(timeout, fetch_page)
+        super().__init__(timeout, delete_after, fetch_page)
 
         self._ctx = ctx
 
@@ -106,8 +118,19 @@ class ContextPagination(_BasePagination):
     async def on_timeout(self):
         await self._msg.edit(view=None)
 
-    async def _send_message(self, *, embed: Embed, view: Optional[View] = None) -> None:
-        self._msg = await self._ctx.send(embed=embed, view=view)  # pyright: ignore[reportArgumentType, reportCallIssue]
+    async def _send_message(
+        self,
+        *,
+        embed: Embed,
+        view: Optional[View] = None,
+        delete_after: Optional[float] = None,
+    ) -> None:
+        self._msg = await self._ctx.reply(
+            embed=embed,
+            view=view,  # pyright: ignore[reportArgumentType, reportCallIssue]
+            ephemeral=True,
+            delete_after=delete_after,  # pyright: ignore[reportArgumentType]
+        )
 
     async def _edit_message(self, *, embed: Embed, view: View) -> None:
         await self._msg.edit(embed=embed, view=view)
@@ -117,9 +140,13 @@ class InteractionPagination(_BasePagination):
     __slots__ = ("_interaction",)
 
     def __init__(
-        self, timeout: float, fetch_page: FetchPage, interaction: Interaction
+        self,
+        timeout: float,
+        fetch_page: FetchPage,
+        interaction: Interaction,
+        delete_after: Optional[float] = None,
     ) -> None:
-        super().__init__(timeout, fetch_page)
+        super().__init__(timeout, delete_after, fetch_page)
 
         self._interaction = interaction
 
@@ -130,11 +157,18 @@ class InteractionPagination(_BasePagination):
         original_response = await self._interaction.original_response()
         await original_response.edit(view=None)
 
-    async def _send_message(self, *, embed: Embed, view: Optional[View] = None) -> None:
+    async def _send_message(
+        self,
+        *,
+        embed: Embed,
+        view: Optional[View] = None,
+        delete_after: Optional[float],
+    ) -> None:
         await self._interaction.response.send_message(
             embed=embed,
-            view=view,  # pyright: ignore[reportArgumentType]
+            view=view,  # pyright: ignore[reportArgumentType, reportCallIssue]
             ephemeral=True,
+            delete_after=delete_after,  # pyright: ignore[reportArgumentType]
         )
 
     async def _edit_message(self, *, embed: Embed, view: View) -> None:
