@@ -132,14 +132,14 @@ _FILTER_PRESETS = {
 }
 
 
-def _format_discord_text_link(s: str) -> str:
-    if len(s) > _MAX_DISCORD_TEXT_LINK_SIZE:
-        s = f"{s[:_MAX_DISCORD_TEXT_LINK_SIZE]}…"
+def _format_hyperlink(text: str, link: str) -> str:
+    if len(text) > _MAX_DISCORD_TEXT_LINK_SIZE:
+        s = f"{text[:_MAX_DISCORD_TEXT_LINK_SIZE]}…"
 
-    s = s.replace("[", "⌈")
-    s = s.replace("]", "⌉")
+    text = text.replace("[", "⌈")
+    text = text.replace("]", "⌉")
 
-    return s
+    return f"[{text}]({link})"
 
 
 def _default_user_permissions() -> Callable[
@@ -727,7 +727,7 @@ class Music(commands.Cog):
             duration = _milli_to_human_readable(tracks[0].duration)
             embed = Embed(
                 title="Track enqueued with success",
-                description=f"**[{_format_discord_text_link(tracks[0].title)}]({tracks[0].uri})** ┃ `{duration}`",
+                description=f"**{_format_hyperlink(tracks[0].title, tracks[0].uri)}** ┃ `{duration}`",
                 color=Color.green(),
             )
         else:
@@ -741,7 +741,7 @@ class Music(commands.Cog):
                 collection_type = ptype.capitalize()
             embed = Embed(
                 title=f"Enqueued {n_enqueued_tracks} track{'s' if free_queue_slots > 1 else ''} with success",
-                description=f"**{collection_type}:** **[{_format_discord_text_link(result.playlist_info.name)}]({query})**",
+                description=f"**{collection_type}:** **{_format_hyperlink(result.playlist_info.name, query)}**",
                 color=Color.green(),
             )
             if n_enqueued_tracks < n_retrieved_tracks:
@@ -1064,7 +1064,7 @@ class Music(commands.Cog):
         embed = Embed(
             title=f"Playing at <#{voice_client.channel.id}>"
             f"{' (paused)' if player.paused else ''}",
-            description=f"**[{_format_discord_text_link(current_track.title)}]({current_track.uri})**\n\n"
+            description=f"**{_format_hyperlink(current_track.title, current_track.uri)}**\n\n"
             f"{player_bar}\n\n**Enqueued by** <@{current_track.requester}>",
             color=Color.green(),
         )
