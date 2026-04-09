@@ -172,7 +172,10 @@ def _is_guild_owner() -> Callable[[app_commands.checks.T], app_commands.checks.T
 
 
 class _NotGuildOwnerNorStaff(app_commands.CheckFailure):
-    pass
+    __slots__ = ("staff_role_id",)
+
+    def __init__(self, staff_role_id: Optional[int]) -> None:
+        self.staff_role_id = staff_role_id
 
 
 def _is_guild_owner_or_staff() -> Callable[
@@ -196,7 +199,7 @@ def _is_guild_owner_or_staff() -> Callable[
             elif member.get_role(guild_db.staff_role_id):
                 return True
 
-        raise _NotGuildOwnerNorStaff()
+        raise _NotGuildOwnerNorStaff(guild_db.staff_role_id)
 
     return app_commands.check(predicate)
 
@@ -1303,17 +1306,23 @@ class Music(commands.Cog):
             )
         else:
             player_state = "not connected"
-        if guild_db.staff_role_id and (
-            role := interaction.guild.get_role(guild_db.staff_role_id)  # pyright: ignore[reportOptionalMemberAccess]
-        ):
-            staff_role = f'"{role.name}"'
-        else:
-            staff_role = "not assigned"
+        staff_role = "not assigned"
+        if guild_db.staff_role_id:
+            if interaction.guild.get_role(guild_db.staff_role_id):  # pyright: ignore[reportOptionalMemberAccess]
+                staff_role = f"<@&{guild_db.staff_role_id}>"
+            else:
+                await self._bot.store.unset_guild_staff_role_id_if_same(
+                    guild_id, guild_db.staff_role_id
+                )
         embed.add_field(
             name="┃ Filter :level_slider:",
             value=f"- {guild_db.filter.name}",
         )
-        embed.add_field(name="┃ Volume :sound:", value=f"- {guild_db.volume}")
+        embed.add_field(
+            name="┃ Player Internal Volume :sound:",
+            value=f"- {guild_db.volume}",
+            inline=False,
+        )
         embed.add_field(
             name="┃ Shuffle Mode :twisted_rightwards_arrows:",
             value=f"- {shuffle_mode_state}",
@@ -1321,12 +1330,13 @@ class Music(commands.Cog):
         embed.add_field(
             name="┃ Loop Mode :arrows_counterclockwise:",
             value=f"- {loop_mode_state}",
+            inline=False,
         )
         embed.add_field(
-            name="┃ Presence on Empty Queue :hand_splayed:",
+            name="┃ When Queue is Empty :zzz:",
             value=f"- {bot_presence}",
         )
-        embed.add_field(name="┃ State :notes:", value=f"- {player_state}")
+        embed.add_field(name="┃ State :notes:", value=f"- {player_state}", inline=False)
         embed.add_field(name="┃ Staff Role :technologist:", value=f"- {staff_role}")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -1341,9 +1351,14 @@ class Music(commands.Cog):
             )
         elif isinstance(error, (_NotGuildOwner, _NotGuildOwnerNorStaff)):
             embed = Embed(
-                title="You aren't allowed to execute this command",
+                title="This command has restricted access",
+                description=f"**Allowed users:** server owner <@{interaction.guild.owner_id}>",  # pyright: ignore[reportOptionalMemberAccess]
                 color=Color.yellow(),
             )
+            if isinstance(error, _NotGuildOwnerNorStaff) and error.staff_role_id:
+                embed.description = (
+                    f"{embed.description} and members of role <@&{error.staff_role_id}>"
+                )
         elif isinstance(error, app_commands.BotMissingPermissions):
             fmted_perms = _prettify_missing_bot_permissions(error)
             embed = Embed(
