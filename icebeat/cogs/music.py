@@ -679,40 +679,44 @@ class Music(commands.Cog):
 
             return
 
-        if result.load_type == lavalink.LoadType.EMPTY:
-            embed = Embed(title="Couldn't find anything to play", color=Color.green())
-            embed.set_footer(text="What kind of voodoo shi you trying to do on me?")
-            await interaction.followup.send(embed=embed)
-            return
-        elif result.load_type == lavalink.LoadType.SEARCH:
-            for i in range(min(len(result.tracks), _MAX_SEARCH_RESULTS)):
-                if result.tracks[i].title == query:
-                    tracks = [result.tracks[i]]
-                    break
-            else:
+        match result.load_type:
+            case lavalink.LoadType.EMPTY:
+                embed = Embed(
+                    title="Couldn't find anything to play", color=Color.green()
+                )
+                embed.set_footer(text="What kind of voodoo shi you trying to do on me?")
+                await interaction.followup.send(embed=embed)
+                return
+            case lavalink.LoadType.SEARCH:
+                for i in range(min(len(result.tracks), _MAX_SEARCH_RESULTS)):
+                    if result.tracks[i].title == query:
+                        tracks = [result.tracks[i]]
+                        break
+                else:
+                    tracks = result.tracks[:1]
+            case lavalink.LoadType.TRACK:
                 tracks = result.tracks[:1]
-        elif result.load_type == lavalink.LoadType.TRACK:
-            tracks = result.tracks[:1]
-        elif result.load_type == lavalink.LoadType.PLAYLIST:
-            tracks = result.tracks
-        else:
-            error: lavalink.LoadResultError = result.error  # pyright: ignore[reportAssignmentType]
+            case lavalink.LoadType.PLAYLIST:
+                tracks = result.tracks
+            case lavalink.LoadType.ERROR:
+                error: lavalink.LoadResultError = result.error  # pyright: ignore[reportAssignmentType]
 
-            __log__.warning(
-                "Failed to get tracks: message=%s, reason=%s",
-                error.message,
-                error.cause,
-            )
+                __log__.warning(
+                    "Failed to get tracks: message=%s, reason=%s",
+                    error.message,
+                    error.cause,
+                )
 
-            embed = Embed(
-                title="Sadly, I received an error from my partner", color=Color.green()
-            )
-            embed.set_footer(
-                text="My associate had a problem while processing your search"
-            )
-            await interaction.followup.send(embed=embed)
+                embed = Embed(
+                    title="Sadly, I received an error from my partner",
+                    color=Color.green(),
+                )
+                embed.set_footer(
+                    text="My associate had a problem while processing your search"
+                )
+                await interaction.followup.send(embed=embed)
 
-            return
+                return
 
         free_queue_slots = player.free_queue_slots
 
@@ -729,9 +733,17 @@ class Music(commands.Cog):
                 color=Color.green(),
             )
         else:
+            collection_type = "Playlist"
+            # LavaSrc plugin offers extra info for playlists: https://github.com/topi314/LavaSrc?tab=readme-ov-file#playlist
+            if (
+                result.plugin_info
+                and (ptype := result.plugin_info.get("type"))
+                and type(ptype) is str
+            ):
+                collection_type = ptype.capitalize()
             embed = Embed(
                 title=f"Enqueued {n_enqueued_tracks} track{'s' if free_queue_slots > 1 else ''} with success",
-                description=f"**Playlist: [{_format_discord_text_link(result.playlist_info.name)}]({query})**",
+                description=f"**{collection_type}:** **[{_format_discord_text_link(result.playlist_info.name)}]({query})**",
                 color=Color.green(),
             )
             if n_enqueued_tracks < n_retrieved_tracks:
