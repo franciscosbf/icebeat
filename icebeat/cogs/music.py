@@ -757,9 +757,6 @@ class Music(commands.Cog):
 
             return []
 
-        if player.is_queue_full():
-            return []
-
         query = _QUERY_SEARCH_FMT.format(current)
         try:
             result = await player.node.get_tracks(query)
