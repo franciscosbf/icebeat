@@ -1258,7 +1258,9 @@ class Music(commands.Cog):
         )
 
         embed = Embed(
-            title=f'Staff role has been set to "{role.name}"', color=Color.green()
+            title="Staff has been changed",
+            description=f"**Role:** <@&{role.id}>",
+            color=Color.green(),
         )
         await interaction.response.send_message(embed=embed)
 
