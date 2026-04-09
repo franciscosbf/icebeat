@@ -7,6 +7,25 @@ from typing import Optional, get_args
 __all__ = ["Bot", "Lavalink", "Database", "Config", "parse"]
 
 
+class ConfigError(Exception):
+    pass
+
+
+class MissingSection(ConfigError):
+    def __init__(self, section: str) -> None:
+        super().__init__(f"missing config section {section}")
+
+
+class MissingField(ConfigError):
+    def __init__(self, section: str, field: str) -> None:
+        super().__init__(f"missing field {field} in section {section}")
+
+
+class InvalidField(ConfigError):
+    def __init__(self, section: str, field: str) -> None:
+        super().__init__(f"field {field} has invalid type in section {section}")
+
+
 @dataclass
 class _Section(ABC):
     pass
@@ -74,16 +93,12 @@ def _extract_section(section_proxy: SectionProxy, section: type[_Section]) -> _S
         if field.name not in section_proxy:
             if field.default is None:
                 continue
-            raise ValueError(
-                f"missing field {field.name} in section {section_proxy.name}"
-            )
+            raise MissingField(section_proxy.name, field.name)
         try:
             ftype = types[0] if (types := get_args(field.type)) else field.type
             kwargs[field.name] = ftype(section_proxy[field.name])  # pyright: ignore reportCallIssue
         except ValueError:
-            raise TypeError(
-                f"field {field.name} has invalid type in section {section_proxy.name}"
-            )
+            raise InvalidField(section_proxy.name, field.name)
 
     return section(**kwargs)
 
@@ -97,7 +112,7 @@ def _extract_config(config_parser: ConfigParser) -> Config:
             if issubclass(section, _OptionalSection):
                 kwargs[field.name] = section()
                 continue
-            raise ValueError(f"missing config section {field.name}")
+            raise MissingSection(field.name)
         section_proxy = config_parser[field.name]
         kwargs[field.name] = _extract_section(section_proxy, section)
 
