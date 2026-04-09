@@ -723,6 +723,7 @@ class Music(commands.Cog):
             await player.play()
 
     @play.autocomplete("query")
+    @_bot_has_permissions(speak=True, connect=True)
     async def query_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
@@ -933,6 +934,7 @@ class Music(commands.Cog):
 
     @jump.autocomplete("position")
     @pop.autocomplete("position")
+    @_bot_has_permissions(speak=True, connect=True)
     async def position_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[int]]:
