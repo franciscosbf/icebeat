@@ -700,19 +700,11 @@ class Music(commands.Cog):
                 tracks = result.tracks
             case lavalink.LoadType.ERROR:
                 error: lavalink.LoadResultError = result.error  # pyright: ignore[reportAssignmentType]
-
-                __log__.warning(
-                    "Failed to get tracks: message=%s, reason=%s",
-                    error.message,
-                    error.cause,
-                )
+                __log__.warning("Failed to get tracks: %s", error.message)
 
                 embed = Embed(
-                    title="Sadly, I received an error from my partner",
+                    title="I have no idea what you're looking for",
                     color=Color.green(),
-                )
-                embed.set_footer(
-                    text="My associate had a problem while processing your search"
                 )
                 await interaction.followup.send(embed=embed)
 
