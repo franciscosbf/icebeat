@@ -1321,13 +1321,15 @@ class Music(commands.Cog):
             elif _is_staff_command(command):
                 command_names.append((command.name, command.description))
 
+        fmted_command_names = "\n".join(
+            f"┌ `/{name}`\n└ {description}" for name, description in command_names
+        )
         embed = Embed(
             title="Staff Commands",
-            description="\n".join(
-                f"┌ `/{name}`\n└ {description}" for name, description in command_names
-            ),
+            description=fmted_command_names,
             color=Color.green(),
         )
+        embed.set_footer(text="Server owner can also use these commands")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(description="Displays player info")
@@ -1400,7 +1402,7 @@ class Music(commands.Cog):
         elif isinstance(error, (_NotGuildOwner, _NotGuildOwnerNorStaff)):
             embed = Embed(
                 title="This command has restricted access",
-                description=f"**Allowed users:** server owner <@{interaction.guild.owner_id}>",  # pyright: ignore[reportOptionalMemberAccess]
+                description="**Allowed users:** server owner",  # pyright: ignore[reportOptionalMemberAccess]
                 color=Color.yellow(),
             )
             if isinstance(error, _NotGuildOwnerNorStaff) and error.staff_role_id:
