@@ -39,7 +39,7 @@ _SEEK_TIME_RE = re.compile(
     r"^(((?P<hours>[1-9]\d*):(?P<mins_h>\d{2}))|(?P<mins_m>[1-9]{0,1}\d)):(?P<secs>\d{2})$"
 )
 _QUERY_SEARCH_FMT = "ytsearch:{}"
-_MAX_SEARCH_RESULTS = 6
+_MAX_SEARCH_RESULTS = 8
 _DEFAULT_USER_PERMISSIONS = Permissions(
     connect=True,
     use_application_commands=True,
