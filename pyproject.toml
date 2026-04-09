@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "icebeat"
 version = "1.0.0"
-requires-python = ">= 3.8"
+requires-python = ">= 3.10"
 description = "Discord music bot."
 authors = [{ name = "Francisco Braço-Forte", email = "f.s.f.b2001@gmail.com" }]
 readme = "README.md"
