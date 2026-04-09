@@ -1,6 +1,7 @@
 import logging
 import re
 from typing import TYPE_CHECKING, Callable, Optional
+from typing_extensions import override
 
 from discord import (
     Client,
@@ -256,6 +257,7 @@ class _LavalinkVoiceClient(VoiceProtocol):
         except lavalink.errors.ClientError:
             pass
 
+    @override
     async def on_voice_state_update(self, data: GuildVoiceStatePayload) -> None:
         raw_channel_id = data["channel_id"]
         if not raw_channel_id:
@@ -269,10 +271,12 @@ class _LavalinkVoiceClient(VoiceProtocol):
         payload = {"t": "VOICE_STATE_UPDATE", "d": data}
         await self._lavalink_client.voice_update_handler(payload)  # pyright: ignore[reportArgumentType]
 
+    @override
     async def on_voice_server_update(self, data: VoiceServerUpdatePayload) -> None:
         payload = {"t": "VOICE_SERVER_UPDATE", "d": data}
         await self._lavalink_client.voice_update_handler(payload)  # pyright: ignore[reportArgumentType]
 
+    @override
     async def connect(
         self,
         *,
@@ -288,6 +292,7 @@ class _LavalinkVoiceClient(VoiceProtocol):
             channel=self.channel, self_mute=self_mute, self_deaf=self_deaf
         )
 
+    @override
     async def disconnect(self, *, force: bool) -> None:
         player = self._lavalink_client.player_manager.get(self._guild.id)
 
@@ -496,6 +501,7 @@ class Music(commands.Cog):
 
         return lavalink_client
 
+    @override
     async def cog_unload(self) -> None:
         await self._lavalink_client.close()
 
@@ -1335,6 +1341,7 @@ class Music(commands.Cog):
         embed.add_field(name="┃ Staff Role :technologist:", value=f"- {staff_role}")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+    @override
     async def cog_app_command_error(
         self, interaction: Interaction, error: app_commands.AppCommandError
     ) -> None:
@@ -1346,18 +1353,6 @@ class Music(commands.Cog):
         elif isinstance(error, (_NotGuildOwner, _NotGuildOwnerNorStaff)):
             embed = Embed(
                 title="You aren't allowed to execute this command",
-                color=Color.yellow(),
-            )
-        elif isinstance(error, _HasTextChannelSet):
-            embed = Embed(
-                title="Exclusive text channel is set",
-                description=f"Hop onto <#{error.channel_id}> to communicate with me",
-                color=Color.yellow(),
-            )
-        elif isinstance(error, _HasTextEnabledAndNotSet):
-            embed = Embed(
-                title="Exclusive text channel is enabled but not set",
-                description="Please contact the server owner",
                 color=Color.yellow(),
             )
         elif isinstance(error, app_commands.BotMissingPermissions):

@@ -1,6 +1,7 @@
 import logging
 from types import TracebackType
 from typing import Any, Optional, Type
+from typing_extensions import override
 
 from discord import (
     AllowedMentions,
@@ -90,6 +91,7 @@ class IceBeat(commands.Bot):
         for cog_name in list(self.cogs.keys()):
             await self.remove_cog(cog_name)
 
+    @override
     async def setup_hook(self) -> None:
         await self.add_cog(Owner(self))
 
@@ -118,11 +120,13 @@ class IceBeat(commands.Bot):
     async def on_guild_role_delete(self, role: Role) -> None:
         await self.store.unset_guild_staff_role_id_if_same(role.guild.id, role.id)
 
+    @override
     async def on_error(self, event_method: str, /, *args: Any, **kwargs: Any) -> None:
         _, _ = args, kwargs
 
         __log__.exception("Error raised by event %s", event_method)
 
+    @override
     async def on_command_error(
         self, ctx: commands.Context, error: commands.CommandError
     ) -> None:
