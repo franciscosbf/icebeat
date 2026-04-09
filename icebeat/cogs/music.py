@@ -664,9 +664,8 @@ class Music(commands.Cog):
         await interaction.response.defer(thinking=True)
 
         try:
-            result = await player.node.get_tracks(
-                query if _URL_RE.match(query) else _QUERY_SEARCH_FMT.format(query)
-            )
+            search = query if _URL_RE.match(query) else _QUERY_SEARCH_FMT.format(query)
+            result = await player.node.get_tracks(search)
         except Exception as e:
             __log__.warning("Failed to request tracks: %v", e)
 
@@ -700,14 +699,17 @@ class Music(commands.Cog):
                 tracks = result.tracks
             case lavalink.LoadType.ERROR:
                 error: lavalink.LoadResultError = result.error  # pyright: ignore[reportAssignmentType]
-                __log__.warning("Failed to get tracks: %s", error.message)
+                __log__.warning(
+                    "Lavalink retrieved an error when trying to search '%s': %s",
+                    search,
+                    error.message,
+                )
 
                 embed = Embed(
                     title="I have no idea what you're looking for",
                     color=Color.green(),
                 )
                 await interaction.followup.send(embed=embed)
-
                 return
 
         free_queue_slots = player.free_queue_slots
