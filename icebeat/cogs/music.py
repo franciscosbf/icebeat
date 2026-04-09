@@ -178,6 +178,19 @@ class _NotGuildOwnerNorStaff(app_commands.CheckFailure):
         self.staff_role_id = staff_role_id
 
 
+def _staff_only():
+    def decorator(command_callback):
+        setattr(command_callback, "__staff__", None)
+
+        return command_callback
+
+    return decorator
+
+
+def _is_staff_command(command: app_commands.Command) -> bool:
+    return hasattr(command.callback, "__staff__")
+
+
 def _is_guild_owner_or_staff() -> Callable[
     [app_commands.checks.T], app_commands.checks.T
 ]:
@@ -1060,6 +1073,7 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
+    @_staff_only()
     @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
     async def wipe(self, interaction: Interaction) -> None:
@@ -1104,6 +1118,7 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
+    @_staff_only()
     @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
     async def shuffle(self, interaction: Interaction) -> None:
@@ -1125,6 +1140,7 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
+    @_staff_only()
     @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
     async def loop(self, interaction: Interaction) -> None:
@@ -1147,6 +1163,7 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
+    @_staff_only()
     @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
     async def volume(
@@ -1168,6 +1185,7 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
+    @_staff_only()
     @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
     async def filter(
@@ -1201,6 +1219,7 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
+    @_staff_only()
     @_is_guild_owner_or_staff()
     async def presence_stay(self, interaction: Interaction) -> None:
         await self._bot.store.set_guild_auto_leave(
@@ -1218,6 +1237,7 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
+    @_staff_only()
     @_is_guild_owner_or_staff()
     async def presence_leave(self, interaction: Interaction) -> None:
         await self._bot.store.set_guild_auto_leave(
@@ -1228,9 +1248,6 @@ class Music(commands.Cog):
         voice_client = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess]
         if voice_client:
             await voice_client.disconnect(force=True)
-
-        if not interaction.permissions.send_messages:
-            return
 
         embed = Embed(title="Leave mode has been activated", color=Color.green())
         await interaction.response.send_message(embed=embed)
@@ -1283,6 +1300,37 @@ class Music(commands.Cog):
 
         embed = Embed(title="Staff role has been removed", color=Color.green())
         await interaction.response.send_message(embed=embed)
+
+    @_staff_group.command(
+        name="commands",
+        description="Lists staff commands",
+    )
+    @_default_user_permissions()
+    @_is_whitelisted()
+    @_cooldown()
+    async def staff_commands(self, interaction: Interaction) -> None:
+        command_names = []
+        for command in self.get_app_commands():
+            if isinstance(command, app_commands.Group):
+                for subcommand in command.walk_commands():
+                    if _is_staff_command(subcommand):  # pyright: ignore[reportArgumentType]
+                        command_names.append(
+                            (
+                                f"{command.name} {subcommand.name}",
+                                subcommand.description,
+                            )
+                        )
+            elif _is_staff_command(command):
+                command_names.append((command.name, command.description))
+
+        embed = Embed(
+            title="Staff Commands",
+            description="\n".join(
+                f"┌ `/{name}`\n└ {description}" for name, description in command_names
+            ),
+            color=Color.green(),
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(description="Displays player info")
     @app_commands.guild_only()
