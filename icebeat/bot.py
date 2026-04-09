@@ -4,8 +4,9 @@ from typing import Any, Optional, Type
 from typing_extensions import override
 
 from discord import (
+    Activity,
+    ActivityType,
     AllowedMentions,
-    Game,
     Guild,
     Intents,
     MemberCacheFlags,
@@ -27,9 +28,9 @@ __all__ = ["IceBeat"]
 
 
 _PREFIX = "/"
-_DESCRIPTION = "IceBeat, a sort of jukebox"
+_DEFAULT_DESCRIPTION = "IceBeat, a sort of jukebox"
 _STATUS = Status.online
-_ACTIVITY = Game(name="music")
+_DEFAULT_ACTIVITY_NAME = "music"
 _INTENTS = Intents(
     guilds=True, message_content=True, dm_messages=True, voice_states=True
 )
@@ -45,14 +46,23 @@ class IceBeat(commands.Bot):
         store: Store,
         conf: Config,
     ) -> None:
+        description = (
+            conf.bot.description if conf.bot.description else _DEFAULT_DESCRIPTION
+        )
+        activity = Activity(
+            name=conf.bot.activity_name
+            if conf.bot.activity_name
+            else _DEFAULT_ACTIVITY_NAME,
+            type=ActivityType.listening,
+        )
         super().__init__(
             command_prefix=_PREFIX,
             help_command=None,
-            description=_DESCRIPTION,
+            description=description,
             intents=_INTENTS,
             member_cache_flags=MemberCacheFlags.from_intents(_INTENTS),
             status=_STATUS,
-            activity=_ACTIVITY,
+            activity=activity,
             allowed_mentions=AllowedMentions.none(),
         )
 

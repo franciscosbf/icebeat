@@ -20,6 +20,8 @@ class _OptionalSection(ABC):
 @dataclass
 class Bot(_Section):
     token: str
+    description: Optional[str] = None
+    activity_name: Optional[str] = None
 
 
 @dataclass
