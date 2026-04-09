@@ -48,6 +48,8 @@ _DEFAULT_USER_PERMISSIONS = Permissions(
     use_application_commands=True,
 )
 _PLAYER_BAR_SIZE = 20
+_COOLDOWN_RATE = 2
+_COOLDOWN_TIME = 2.0
 _ORDINAL_SUFFIX = (
     "th",
     "st",
@@ -148,7 +150,9 @@ def _default_user_permissions() -> Callable[
 
 def _cooldown() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
     return app_commands.checks.cooldown(
-        rate=2, per=2.0, key=lambda interaction: interaction.guild_id
+        rate=_COOLDOWN_RATE,
+        per=_COOLDOWN_TIME,
+        key=lambda interaction: interaction.guild_id,
     )
 
 
