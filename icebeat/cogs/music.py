@@ -1073,8 +1073,6 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
-    @_staff_only()
-    @_is_guild_owner_or_staff()
     @_ensure_player_is_ready(bypass_presence_check=True)
     async def wipe(self, interaction: Interaction) -> None:
         player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
