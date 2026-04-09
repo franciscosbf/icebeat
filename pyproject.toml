@@ -12,7 +12,7 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
-  "discord.py[voice]==2.5.2",
+  "discord.py[voice]==2.7.1",
   "lavalink==5.11.0",
   "cachetools==6.1.0",
   "aiosqlite==0.21.0",
