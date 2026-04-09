@@ -2,7 +2,7 @@ from abc import ABC
 from dataclasses import dataclass, fields
 from configparser import ConfigParser, SectionProxy
 from pathlib import Path
-from typing import Optional
+from typing import Optional, get_args
 
 __all__ = ["Bot", "Lavalink", "Database", "Config", "parse"]
 
@@ -22,6 +22,11 @@ class Bot(_Section):
     token: str
     description: Optional[str] = None
     activity_name: Optional[str] = None
+
+
+@dataclass
+class Player(_OptionalSection):
+    queue_size: Optional[int] = None
 
 
 @dataclass
@@ -47,6 +52,7 @@ class Database(_Section):
 @dataclass
 class Config:
     bot: Bot
+    player: Player
     lavalink: Lavalink
     database: Database
     cache: Cache
@@ -65,14 +71,15 @@ def _extract_section(section_proxy: SectionProxy, section: type[_Section]) -> _S
     kwargs = {}
 
     for field in fields(section):
-        if field.default is None:
-            continue
-        elif field.name not in section_proxy:
+        if field.name not in section_proxy:
+            if field.default is None:
+                continue
             raise ValueError(
                 f"missing field {field.name} in section {section_proxy.name}"
             )
         try:
-            kwargs[field.name] = field.type(section_proxy[field.name])  # pyright: ignore reportCallIssue
+            ftype = types[0] if (types := get_args(field.type)) else field.type
+            kwargs[field.name] = ftype(section_proxy[field.name])  # pyright: ignore reportCallIssue
         except ValueError:
             raise TypeError(
                 f"field {field.name} has invalid type in section {section_proxy.name}"
@@ -86,10 +93,10 @@ def _extract_config(config_parser: ConfigParser) -> Config:
 
     for field in fields(Config):
         section: type[_Section] = field.type  # pyright: ignore reportAssignmentType
-        if issubclass(section, _OptionalSection):
-            kwargs[field.name] = section()
-            continue
-        elif field.name not in config_parser:
+        if field.name not in config_parser:
+            if issubclass(section, _OptionalSection):
+                kwargs[field.name] = section()
+                continue
             raise ValueError(f"missing config section {field.name}")
         section_proxy = config_parser[field.name]
         kwargs[field.name] = _extract_section(section_proxy, section)
