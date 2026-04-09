@@ -681,9 +681,8 @@ class Music(commands.Cog):
         match result.load_type:
             case lavalink.LoadType.EMPTY:
                 embed = Embed(
-                    title="Couldn't find anything to play", color=Color.green()
+                    title="Sorry, I couldn't find anything to play", color=Color.green()
                 )
-                embed.set_footer(text="What kind of voodoo shi you trying to do on me?")
                 await interaction.followup.send(embed=embed)
                 return
             case lavalink.LoadType.SEARCH:
@@ -709,6 +708,7 @@ class Music(commands.Cog):
                     title="I have no idea what you're looking for",
                     color=Color.green(),
                 )
+                embed.set_footer(text="What kind of voodoo shi you trying to do on me?")
                 await interaction.followup.send(embed=embed)
                 return
 
