@@ -26,6 +26,7 @@ from discord.ext import commands
 import lavalink
 
 from ..model import Filter
+from ..player import IceBeatPlayer
 
 if TYPE_CHECKING:
     from ..bot import IceBeat
@@ -46,7 +47,6 @@ _DEFAULT_USER_PERMISSIONS = Permissions(
     use_application_commands=True,
 )
 _PLAYER_BAR_SIZE = 20
-_MAX_QUEUE_SIZE = 1000
 _ORDINAL_SUFFIX = (
     "th",
     "st",
@@ -344,12 +344,10 @@ class _VoiceChannelIsFull(app_commands.CheckFailure):
 
 
 def _parse_loop_mode(loop: bool) -> int:
-    return (
-        lavalink.DefaultPlayer.LOOP_QUEUE if loop else lavalink.DefaultPlayer.LOOP_NONE
-    )
+    return IceBeatPlayer.LOOP_QUEUE if loop else IceBeatPlayer.LOOP_NONE
 
 
-async def _set_filter_preset(player: lavalink.DefaultPlayer, filter: Filter) -> None:
+async def _set_filter_preset(player: IceBeatPlayer, filter: Filter) -> None:
     if filter == Filter.normal:
         await player.clear_filters()
         return
@@ -369,9 +367,7 @@ def _ensure_player_is_ready(
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
         try:
-            player: lavalink.DefaultPlayer = bot.lavalink_client.player_manager.create(
-                guild_id
-            )
+            player: IceBeatPlayer = bot.lavalink_client.player_manager.create(guild_id)
         except Exception as e:
             raise _FailedToRetrievePlayer(e)
 
@@ -462,9 +458,7 @@ def _is_playing() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
         bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
-        player: lavalink.DefaultPlayer = bot.lavalink_client.player_manager.create(
-            guild_id
-        )  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = bot.lavalink_client.player_manager.create(guild_id)  # pyright: ignore[reportAssignmentType]
 
         if not player.is_playing:
             raise _NotPlaying()
@@ -491,7 +485,11 @@ class Music(commands.Cog):
         self._bot.lavalink_client = self._lavalink_client
 
     def setup_lavalink(self) -> lavalink.Client:
-        lavalink_client = lavalink.Client(self._bot.user.id)  # pyright: ignore reportOptionalMemberAccess
+        print(self._bot.conf.player.queue_size)
+        if queue_size := self._bot.conf.player.queue_size:
+            IceBeatPlayer.set_queue_size(queue_size)
+
+        lavalink_client = lavalink.Client(self._bot.user.id, player=IceBeatPlayer)  # pyright: ignore reportOptionalMemberAccess
 
         lavalink_client.add_event_hooks(self)
 
@@ -526,13 +524,13 @@ class Music(commands.Cog):
 
         return False
 
-    def _get_player(self, interaction: Interaction) -> Optional[lavalink.DefaultPlayer]:
+    def _get_player(self, interaction: Interaction) -> Optional[IceBeatPlayer]:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
         return self._bot.lavalink_client.player_manager.get(guild_id)  # pyright: ignore[reportReturnType]
 
     async def _disconnect_bot(
-        self, player: lavalink.DefaultPlayer, voice_client: _LavalinkVoiceClient
+        self, player: IceBeatPlayer, voice_client: _LavalinkVoiceClient
     ) -> None:
         player.queue.clear()
         await player.stop()
@@ -572,7 +570,7 @@ class Music(commands.Cog):
         if not await self._guild_still_exists(event.player.guild_id):
             return
 
-        player: lavalink.DefaultPlayer = event.player  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = event.player  # pyright: ignore[reportAssignmentType]
         try:
             await player.play()
         except Exception as e:
@@ -610,8 +608,8 @@ class Music(commands.Cog):
     async def on_voice_state_update(
         self, member: Member, before: VoiceState, after: VoiceState
     ) -> None:
-        player: Optional[lavalink.DefaultPlayer] = (
-            self._bot.lavalink_client.player_manager.get(member.guild.id)
+        player: Optional[IceBeatPlayer] = self._bot.lavalink_client.player_manager.get(
+            member.guild.id
         )
         if not player:
             return
@@ -642,12 +640,13 @@ class Music(commands.Cog):
     @_cooldown()
     @_ensure_player_is_ready()
     async def play(self, interaction: Interaction, query: str) -> None:
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
-        free_queue_slots = _MAX_QUEUE_SIZE - len(player.queue)
-        if free_queue_slots == 0:
+        if player.is_queue_full():
             embed = Embed(title="Queue is full", color=Color.green())
-            embed.set_footer(text=f"Queue only supports up to {_MAX_QUEUE_SIZE} tracks")
+            embed.set_footer(
+                text=f"Queue only supports up to {player.max_queue_size} tracks"
+            )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -704,6 +703,8 @@ class Music(commands.Cog):
 
             return
 
+        free_queue_slots = player.free_queue_slots
+
         n_retrieved_tracks = len(tracks)
         n_enqueued_tracks = min(free_queue_slots, n_retrieved_tracks)
         for i in range(n_enqueued_tracks):
@@ -726,7 +727,7 @@ class Music(commands.Cog):
                 embed.set_footer(
                     text=f"Were retrieved {n_retrieved_tracks} track"
                     f"{'s' if n_retrieved_tracks > 1 else ''} from the playlist, although\n"
-                    f"the queue has reached its full capacity ({_MAX_QUEUE_SIZE} tracks)"
+                    f"the queue has reached its full capacity ({player.max_queue_size} tracks)"
                 )
         await interaction.followup.send(embed=embed)
 
@@ -744,8 +745,8 @@ class Music(commands.Cog):
 
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
         try:
-            player: lavalink.DefaultPlayer = (
-                self._bot.lavalink_client.player_manager.create(guild_id)
+            player: IceBeatPlayer = self._bot.lavalink_client.player_manager.create(
+                guild_id
             )
         except Exception as e:
             __log__.warning(
@@ -754,6 +755,9 @@ class Music(commands.Cog):
                 e,
             )
 
+            return []
+
+        if player.is_queue_full():
             return []
 
         query = _QUERY_SEARCH_FMT.format(current)
@@ -790,7 +794,7 @@ class Music(commands.Cog):
     @_is_playing()
     @_ensure_player_is_ready()
     async def pause(self, interaction: Interaction) -> None:
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         if not player.paused:
             await player.set_pause(True)
@@ -814,7 +818,7 @@ class Music(commands.Cog):
     @_is_playing()
     @_ensure_player_is_ready()
     async def resume(self, interaction: Interaction) -> None:
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         if player.paused:
             await player.set_pause(False)
@@ -838,7 +842,7 @@ class Music(commands.Cog):
     @_is_playing()
     @_ensure_player_is_ready()
     async def skip(self, interaction: Interaction) -> None:
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         current_track: lavalink.AudioTrack = player.current  # pyright: ignore[reportAssignmentType]
 
@@ -867,7 +871,7 @@ class Music(commands.Cog):
         interaction: Interaction,
         position: app_commands.Range[int, 1, None],
     ) -> None:
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         ephemeral = True
         if not player.queue:
@@ -915,7 +919,7 @@ class Music(commands.Cog):
         interaction: Interaction,
         position: app_commands.Range[int, 1, None],
     ) -> None:
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         ephemeral = True
         if not player.queue:
@@ -954,7 +958,7 @@ class Music(commands.Cog):
         if not current.isdigit():
             return []
 
-        player: Optional[lavalink.DefaultPlayer] = self._get_player(interaction)
+        player: Optional[IceBeatPlayer] = self._get_player(interaction)
         if not player:
             return []
 
@@ -993,7 +997,7 @@ class Music(commands.Cog):
                 title="You must provide a valid position", color=Color.green()
             )
         else:
-            player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+            player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
             position_milli, position_original = position
 
@@ -1027,7 +1031,7 @@ class Music(commands.Cog):
     @_is_playing()
     @_ensure_player_is_ready()
     async def current(self, interaction: Interaction) -> None:
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         voice_client: _LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
         current_track: lavalink.AudioTrack = player.current  # pyright: ignore[reportAssignmentType]
@@ -1075,7 +1079,7 @@ class Music(commands.Cog):
     @_cooldown()
     @_ensure_player_is_ready(bypass_presence_check=True)
     async def wipe(self, interaction: Interaction) -> None:
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         if player.queue:
             player.queue = []
@@ -1100,7 +1104,7 @@ class Music(commands.Cog):
     @_cooldown()
     @_ensure_player_is_ready()
     async def leave(self, interaction: Interaction) -> None:
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         voice_client: _LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
         await self._disconnect_bot(player, voice_client)
@@ -1124,7 +1128,7 @@ class Music(commands.Cog):
 
         shuffle = await self._bot.store.switch_guild_shuffle(guild_id)
 
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
         player.set_shuffle(shuffle)
 
         embed = Embed(
@@ -1146,7 +1150,7 @@ class Music(commands.Cog):
 
         loop = await self._bot.store.switch_guild_shuffle(guild_id)
 
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
         player.set_loop(_parse_loop_mode(loop))
 
         embed = Embed(
@@ -1171,7 +1175,7 @@ class Music(commands.Cog):
 
         await self._bot.store.set_guild_volume(guild_id, volume=level)
 
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
         await player.set_volume(vol=level)
 
         embed = Embed(title="Volume has been changed", color=Color.green())
@@ -1195,7 +1199,7 @@ class Music(commands.Cog):
 
         await self._bot.store.set_guild_filter(guild_id, filter)
 
-        player: lavalink.DefaultPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
         await _set_filter_preset(player, filter)
 
         embed = Embed(
