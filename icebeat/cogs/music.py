@@ -36,6 +36,7 @@ __all__ = ["Music"]
 __log__ = logging.getLogger(__name__)
 
 
+_MAX_DISCORD_TEXT_LINK_SIZE = 55
 _URL_RE = re.compile(r"^https?://(?:www\.)?.+")
 _SEEK_TIME_RE = re.compile(
     r"^(((?P<hours>[1-9]\d*):(?P<mins_h>\d{2}))|(?P<mins_m>[1-9]{0,1}\d)):(?P<secs>\d{2})$"
@@ -127,6 +128,16 @@ _FILTER_PRESETS = {
         lavalink.Tremolo(frequency=14, depth=0.3),
     ),
 }
+
+
+def _format_discord_text_lnik(s: str) -> str:
+    if len(s) > _MAX_DISCORD_TEXT_LINK_SIZE:
+        s = f"{s[:_MAX_DISCORD_TEXT_LINK_SIZE]}…"
+
+    s = s.replace("[", "⌈")
+    s = s.replace("]", "⌉")
+
+    return s
 
 
 def _default_user_permissions() -> Callable[
@@ -714,13 +725,13 @@ class Music(commands.Cog):
             duration = _milli_to_human_readable(tracks[0].duration)
             embed = Embed(
                 title="Track enqueued with success",
-                description=f"**[{tracks[0].title}]({tracks[0].uri})** ┃ `{duration}`",
+                description=f"**[{_format_discord_text_lnik(tracks[0].title)}]({tracks[0].uri})** ┃ `{duration}`",
                 color=Color.green(),
             )
         else:
             embed = Embed(
                 title=f"Enqueued {n_enqueued_tracks} track{'s' if free_queue_slots > 1 else ''} with success",
-                description=f"**Playlist: [{result.playlist_info.name}]({query})**",
+                description=f"**Playlist: [{_format_discord_text_lnik(result.playlist_info.name)}]({query})**",
                 color=Color.green(),
             )
             if n_enqueued_tracks < n_retrieved_tracks:
@@ -1043,7 +1054,7 @@ class Music(commands.Cog):
         embed = Embed(
             title=f"Playing at <#{voice_client.channel.id}>"
             f"{' (paused)' if player.paused else ''}",
-            description=f"**[{current_track.title}]({current_track.uri})**\n\n"
+            description=f"**[{_format_discord_text_lnik(current_track.title)}]({current_track.uri})**\n\n"
             f"{player_bar}\n\n**Enqueued by** <@{current_track.requester}>",
             color=Color.green(),
         )
@@ -1107,7 +1118,7 @@ class Music(commands.Cog):
         await self._disconnect_bot(player, voice_client)
 
         embed = Embed(
-            title=f"Bot disconnected from <#{voice_client.channel.id}>",
+            title=f"Disconnected from <#{voice_client.channel.id}>",
             color=Color.green(),
         )
         await interaction.response.send_message(embed=embed)
@@ -1413,7 +1424,7 @@ class Music(commands.Cog):
         elif isinstance(error, app_commands.BotMissingPermissions):
             fmted_perms = _prettify_missing_bot_permissions(error)
             embed = Embed(
-                title="Bot has missing required permissions",
+                title="I don't have all required permissions",
                 description=f"**Missing permissions:** {fmted_perms}",
                 color=Color.yellow(),
             )
@@ -1446,9 +1457,7 @@ class Music(commands.Cog):
             )
             if bot_voice_client := interaction.guild.voice_client:  # pyright: ignore[reportOptionalMemberAccess]
                 bot_voice_channel: VoiceChannel = bot_voice_client.channel  # pyright: ignore[reportAssignmentType]
-                embed.description = (
-                    f"Hop into <#{bot_voice_channel.id}>, I'm here to party"
-                )
+                embed.description = f"Hop into <#{bot_voice_channel.id}>, I'm here"
         elif isinstance(error, _BotNotInVoiceChannel):
             embed = Embed(
                 title="I'm not in a voice channel",
@@ -1465,7 +1474,7 @@ class Music(commands.Cog):
                 title="Damn son, the channel's overflowing",
                 color=Color.yellow(),
             )
-            embed.set_footer(text="I meant it's full... duh")
+            embed.set_footer(text="I mean, it's full... duh")
         elif isinstance(error, _NotPlaying):
             embed = Embed(title="There's no track in the player", color=Color.yellow())
         else:
