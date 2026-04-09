@@ -201,17 +201,6 @@ def _is_guild_owner_or_staff() -> Callable[
     return app_commands.check(predicate)
 
 
-class _HasTextChannelSet(app_commands.CheckFailure):
-    __slots__ = ("channel_id",)
-
-    def __init__(self, channel_id: int) -> None:
-        self.channel_id = channel_id
-
-
-class _HasTextEnabledAndNotSet(app_commands.CheckFailure):
-    pass
-
-
 def _bot_has_permissions(
     **perms: bool,
 ) -> Callable[[app_commands.checks.T], app_commands.checks.T]:
