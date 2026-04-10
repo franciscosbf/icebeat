@@ -48,8 +48,6 @@ _DEFAULT_USER_PERMISSIONS = Permissions(
     use_application_commands=True,
 )
 _PLAYER_BAR_SIZE = 20
-_COOLDOWN_RATE = 2
-_COOLDOWN_TIME = 2.0
 _ORDINAL_SUFFIX = (
     "th",
     "st",
@@ -153,9 +151,15 @@ def _default_user_permissions() -> Callable[
 
 
 def _cooldown() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
-    return app_commands.checks.cooldown(
-        rate=_COOLDOWN_RATE,
-        per=_COOLDOWN_TIME,
+    def factory(interaction: Interaction) -> app_commands.Cooldown:
+        bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
+
+        return app_commands.Cooldown(
+            rate=bot.cooldown_preset.rate, per=bot.cooldown_preset.time
+        )
+
+    return app_commands.checks.dynamic_cooldown(
+        factory=factory,
         key=lambda interaction: interaction.guild_id,
     )
 

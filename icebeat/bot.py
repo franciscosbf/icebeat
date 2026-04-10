@@ -20,6 +20,7 @@ from discord.ext import commands
 import lavalink
 
 from icebeat.config import Config
+from icebeat.cooldown import CooldownPreset
 
 from .store import Store
 from .cogs import Owner, Music
@@ -39,7 +40,7 @@ __log__ = logging.getLogger(__name__)
 
 
 class IceBeat(commands.Bot):
-    __slots__ = ("store", "lavalink_client")
+    __slots__ = ("conf", "store", "cooldown_preset", "lavalink_client")
 
     def __init__(
         self,
@@ -66,6 +67,9 @@ class IceBeat(commands.Bot):
             allowed_mentions=AllowedMentions.none(),
         )
 
+        self.cooldown_preset = CooldownPreset(
+            conf.commands.cooldown_rate, conf.commands.cooldown_time
+        )
         self.store = store
         self.conf = conf
 

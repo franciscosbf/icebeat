@@ -20,7 +20,14 @@ _WHITELIST_DELETE_AFTER = 20.0
 
 
 def _cooldown() -> Callable[[commands.core.T], commands.core.T]:
-    return commands.cooldown(rate=2, per=4.0, type=commands.BucketType.guild)
+    def cooldown(ctx: commands.Context) -> commands.Cooldown:
+        bot: "IceBeat" = ctx.bot
+
+        return commands.Cooldown(
+            rate=bot.cooldown_preset.rate, per=bot.cooldown_preset.time
+        )
+
+    return commands.dynamic_cooldown(cooldown=cooldown, type=commands.BucketType.guild)
 
 
 def _command_extras(**kwargs) -> dict[str, Any]:

@@ -69,12 +69,19 @@ class Database(_Section):
 
 
 @dataclass
+class Commands(_OptionalSection):
+    cooldown_rate: Optional[int] = None
+    cooldown_time: Optional[int] = None
+
+
+@dataclass
 class Config:
     bot: Bot
     player: Player
     lavalink: Lavalink
     database: Database
     cache: Cache
+    commands: Commands
 
 
 def _read(path: Path) -> ConfigParser:
