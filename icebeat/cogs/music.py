@@ -1,6 +1,7 @@
 import logging
 import re
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional, Union
+from attr import dataclass
 from typing_extensions import override
 
 from discord import (
@@ -17,7 +18,7 @@ from discord import (
     VoiceState,
     app_commands,
 )
-from discord.abc import Connectable
+from discord.abc import Connectable, Snowflake
 from discord.types.voice import (
     GuildVoiceState as GuildVoiceStatePayload,
     VoiceServerUpdate as VoiceServerUpdatePayload,
@@ -25,8 +26,15 @@ from discord.types.voice import (
 from discord.ext import commands
 import lavalink
 
+
 from ..model import Filter
 from ..player import IceBeatPlayer
+from ..treesync import (
+    AppCommands,
+    RegisteredAppCommands,
+    RemovedAppCommands,
+    tree_sync_listener,
+)
 
 if TYPE_CHECKING:
     from ..bot import IceBeat
@@ -498,17 +506,32 @@ def _to_ordinal(value: int) -> str:
     return f"{value}{suffix}"
 
 
+@dataclass
+class _StaffCommand:
+    id: int
+    qualified_name: str
+    description: str
+
+
 class Music(commands.Cog):
-    __slots__ = ("_bot", "_lavalink_client")
+    __slots__ = (
+        "_bot",
+        "_lavalink_client",
+        "_staff_commands",
+        "_cached_guild_staff_commands",
+    )
 
     def __init__(self, bot: "IceBeat") -> None:
         self._bot = bot
+        self._lavalink_client = self._setup_lavalink()
+        self._staff_commands: list[
+            tuple[app_commands.Command, Optional[app_commands.Group]]
+        ] = self._group_staff_commands()
+        self._cached_guild_staff_commands: dict[int, list[_StaffCommand]] = {}
 
-        self._lavalink_client = self.setup_lavalink()
         self._bot.lavalink_client = self._lavalink_client
 
-    def setup_lavalink(self) -> lavalink.Client:
-        print(self._bot.conf.player.queue_size)
+    def _setup_lavalink(self) -> lavalink.Client:
         if queue_size := self._bot.conf.player.queue_size:
             IceBeatPlayer.set_queue_size(queue_size)
 
@@ -527,9 +550,56 @@ class Music(commands.Cog):
 
         return lavalink_client
 
-    @override
-    async def cog_unload(self) -> None:
-        await self._lavalink_client.close()
+    def _group_staff_commands(
+        self,
+    ) -> list[tuple[app_commands.Command, Optional[app_commands.Group]]]:
+        staff_commands = []
+
+        def walk_group_commands(
+            base_group: app_commands.Group,
+            command: Union[app_commands.Command, app_commands.Group],
+            staff_commands: list[
+                tuple[app_commands.Command, Optional[app_commands.Group]]
+            ],
+        ) -> None:
+            if isinstance(command, app_commands.Group):
+                for command in command.walk_commands():
+                    walk_group_commands(base_group, command, staff_commands)
+            elif _is_staff_command(command):
+                staff_commands.append((command, base_group))
+
+        for command in self.get_app_commands():
+            if isinstance(command, app_commands.Group):
+                walk_group_commands(command, command, staff_commands)
+            elif _is_staff_command(command):
+                staff_commands.append((command, None))
+
+        return staff_commands
+
+    def _add_cached_guild_staff_commands(
+        self, guild: Snowflake, guild_app_commands: AppCommands
+    ) -> None:
+        cached_staff_commands = []
+        for command, group in self._staff_commands:
+            name = group.name if group else command.name
+            if not (guild_app_command := guild_app_commands.get(name)):
+                return
+            cached_staff_commands.append(
+                _StaffCommand(
+                    guild_app_command.id,
+                    command.qualified_name,
+                    command.description,
+                )
+            )
+        self._cached_guild_staff_commands[guild.id] = cached_staff_commands
+
+    def _get_cached_guild_staff_commands(
+        self, guild: Snowflake
+    ) -> Optional[list[_StaffCommand]]:
+        return self._cached_guild_staff_commands.get(guild.id)
+
+    def _remove_cached_guild_staff_commands(self, guild: Snowflake) -> None:
+        self._cached_guild_staff_commands.pop(guild.id)
 
     async def _decide_bot_presence(self, guild_id: int) -> None:
         guild = self._bot.get_guild(guild_id)
@@ -559,6 +629,18 @@ class Music(commands.Cog):
         await player.stop()
 
         await voice_client.disconnect(force=True)
+
+    @override
+    async def cog_unload(self) -> None:
+        await self._lavalink_client.close()
+
+    @tree_sync_listener(RegisteredAppCommands)
+    async def on_registered_app_commands(self, event: RegisteredAppCommands) -> None:
+        self._add_cached_guild_staff_commands(event.guild, event.commands)
+
+    @tree_sync_listener(RemovedAppCommands)
+    async def on_unregistered_app_commands(self, event: RemovedAppCommands) -> None:
+        self._remove_cached_guild_staff_commands(event.guild)
 
     @lavalink.listener(lavalink.TrackStartEvent)
     async def on_track_start(self, event: lavalink.TrackStartEvent) -> None:
@@ -1343,29 +1425,22 @@ class Music(commands.Cog):
     @_is_whitelisted()
     @_cooldown()
     async def staff_commands(self, interaction: Interaction) -> None:
-        command_names = []
-        for command in self.get_app_commands():
-            if isinstance(command, app_commands.Group):
-                for subcommand in command.walk_commands():
-                    if _is_staff_command(subcommand):  # pyright: ignore[reportArgumentType]
-                        command_names.append(
-                            (
-                                f"{command.name} {subcommand.name}",
-                                subcommand.description,
-                            )
-                        )
-            elif _is_staff_command(command):
-                command_names.append((command.name, command.description))
-
-        fmted_command_names = "\n".join(
-            f"┌ `/{name}`\n└ {description}" for name, description in command_names
-        )
-        embed = Embed(
-            title="Staff Commands",
-            description=fmted_command_names,
-            color=Color.green(),
-        )
-        embed.set_footer(text="Server owner can also use these commands")
+        if commands := self._get_cached_guild_staff_commands(interaction.guild):  # pyright: ignore[reportArgumentType]
+            fmted_commands = "\n".join(
+                f"┌ </{command.qualified_name}:{command.id}>\n└ {command.description}"
+                for command in commands
+            )
+            embed = Embed(
+                title="Staff Commands",
+                description=fmted_commands,
+                color=Color.green(),
+            )
+            embed.set_footer(text="Server owner can also use these commands")
+        else:
+            embed = Embed(
+                title="I was unable to find staff commands",
+                color=Color.green(),
+            )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(description="Displays player info")

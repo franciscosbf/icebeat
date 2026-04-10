@@ -221,6 +221,8 @@ class Owner(commands.Cog):
                     else:
                         await self._bot.store.remove_from_whitelist(guild_id)
 
+                        await self._bot.remove_app_commands_from_guild(guild)
+
                         __log__.info(
                             "Removed server %s from whitelist as bot is no longer a member",
                             guild_id,

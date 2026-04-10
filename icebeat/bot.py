@@ -1,6 +1,7 @@
 import logging
 from types import TracebackType
-from typing import Any, Optional, Type
+from typing import Any, Optional, Sequence, Type
+from discord.utils import MISSING
 from typing_extensions import override
 
 from discord import (
@@ -24,9 +25,16 @@ from icebeat.cooldown import CooldownPreset
 
 from .store import Store
 from .cogs import Owner, Music
+from .treesync import (
+    AppCommands,
+    RegisteredAppCommands,
+    TreeSyncEvents,
+    RemovedAppCommands,
+)
 
-__all__ = ["IceBeat"]
-
+__all__ = [
+    "IceBeat",
+]
 
 _PREFIX = "/"
 _DEFAULT_DESCRIPTION = "IceBeat, a sort of jukebox"
@@ -40,7 +48,13 @@ __log__ = logging.getLogger(__name__)
 
 
 class IceBeat(commands.Bot):
-    __slots__ = ("cooldown_preset", "conf", "store", "lavalink_client")
+    __slots__ = (
+        "cooldown_preset",
+        "conf",
+        "store",
+        "lavalink_client",
+        "_tree_sync_events",
+    )
 
     def __init__(
         self,
@@ -75,6 +89,15 @@ class IceBeat(commands.Bot):
 
         self.lavalink_client: lavalink.Client = None  # pyright: ignore[reportAttributeAccessIssue]
 
+        self._tree_sync_events = TreeSyncEvents()
+
+    async def _sync_guild_app_commands(self, guild: Snowflake) -> None:
+        commands = await self.tree.sync(guild=guild)
+
+        self._tree_sync_events.dispatch(
+            RegisteredAppCommands(guild, AppCommands(commands))
+        )
+
     async def _verify_whitelisted_guilds(self) -> None:
         whitelist = await self.store.get_whitelist()
 
@@ -99,11 +122,25 @@ class IceBeat(commands.Bot):
         await self.add_cog(Music(self), guilds=whitelisted_guilds)
 
         for whitelisted_guild in whitelisted_guilds:
-            await self.tree.sync(guild=whitelisted_guild)
+            await self._sync_guild_app_commands(whitelisted_guild)
 
     async def _unload_cogs(self) -> None:
         for cog_name in list(self.cogs.keys()):
             await self.remove_cog(cog_name)
+
+    @override
+    async def add_cog(
+        self,
+        cog: commands.Cog,
+        /,
+        *,
+        override: bool = False,
+        guild: Optional[Snowflake] = MISSING,
+        guilds: Sequence[Snowflake] = MISSING,
+    ) -> None:
+        await super().add_cog(cog, override=override, guild=guild, guilds=guilds)
+
+        self._tree_sync_events.register_hooks(cog)
 
     @override
     async def setup_hook(self) -> None:
@@ -151,9 +188,11 @@ class IceBeat(commands.Bot):
             commands = cog.get_app_commands()
             for command in commands:
                 self.tree.add_command(command, guild=guild, override=True)
-        await self.tree.sync(guild=guild)
+        await self._sync_guild_app_commands(guild)
 
     async def remove_app_commands_from_guild(self, guild: Snowflake) -> None:
+        self._tree_sync_events.dispatch(RemovedAppCommands(guild))
+
         self.tree.clear_commands(guild=guild)
         await self.tree.sync(guild=guild)
 
