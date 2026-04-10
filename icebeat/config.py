@@ -4,7 +4,16 @@ from configparser import ConfigParser, SectionProxy
 from pathlib import Path
 from typing import Optional, get_args
 
-__all__ = ["Bot", "Lavalink", "Database", "Config", "parse"]
+__all__ = [
+    "ConfigError",
+    "MissingField",
+    "InvalidField",
+    "Bot",
+    "Lavalink",
+    "Database",
+    "Config",
+    "parse",
+]
 
 
 class ConfigError(Exception):
