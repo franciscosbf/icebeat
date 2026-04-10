@@ -40,7 +40,7 @@ __log__ = logging.getLogger(__name__)
 
 
 class IceBeat(commands.Bot):
-    __slots__ = ("conf", "store", "cooldown_preset", "lavalink_client")
+    __slots__ = ("cooldown_preset", "conf", "store", "lavalink_client")
 
     def __init__(
         self,
