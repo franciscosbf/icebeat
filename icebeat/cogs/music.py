@@ -69,72 +69,76 @@ _ORDINAL_SUFFIX = (
 _FILTER_PRESETS = {
     Filter.bassboost: lavalink.Equalizer(
         gains=[
-            0.6,
-            0.67,
-            0.67,
+            0.18,
+            0.2,
+            0.18,
+            0.1,
+            0.05,
             0.0,
-            -0.5,
-            0.15,
-            -0.45,
-            0.23,
-            0.35,
-            0.45,
-            0.55,
-            0.6,
-            0.55,
+            0.0,
+            0.0,
+            0.02,
+            0.03,
+            0.05,
+            0.06,
+            0.05,
+            0.03,
             0.0,
         ]
     ),
     Filter.pop: lavalink.Equalizer(
         [
-            0.65,
-            0.45,
-            -0.45,
-            -0.65,
-            -0.35,
-            0.45,
-            0.55,
-            0.6,
-            0.6,
-            0.6,
             0.0,
             0.0,
             0.0,
             0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
         ]
     ),
     Filter.soft: lavalink.LowPass(),
     Filter.treblebass: lavalink.Equalizer(
         gains=[
-            0.6,
-            0.67,
-            0.67,
+            -0.3,
+            -0.3,
+            -0.2,
+            -0.1,
             0.0,
-            -0.5,
-            0.15,
-            -0.45,
-            0.23,
-            0.35,
-            0.45,
-            0.55,
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
             0.6,
-            0.55,
-            0.0,
+            0.7,
+            0.7,
+            0.7,
+            0.7,
         ]
     ),
     Filter.eightd: lavalink.Rotation(rotation_hz=0.2),
     Filter.karaoke: lavalink.Karaoke(),
     Filter.vaporwave: (
         lavalink.Equalizer(gains=[0.3, 0.3]),
-        lavalink.Timescale(pitch=0.5),
-        lavalink.Tremolo(frequency=14, depth=0.3),
+        lavalink.Timescale(speed=0.9, pitch=0.8),
+        lavalink.Tremolo(depth=0.3),
     ),
+    Filter.nightcore: lavalink.Timescale(speed=1.2, pitch=1.2),
 }
 
 
 def _format_hyperlink(text: str, link: str) -> str:
     if len(text) > _MAX_DISCORD_TEXT_LINK_SIZE:
-        s = f"{text[:_MAX_DISCORD_TEXT_LINK_SIZE]}…"
+        text = f"{text[:_MAX_DISCORD_TEXT_LINK_SIZE]}…"
 
     text = text.replace("[", "⌈")
     text = text.replace("]", "⌉")
