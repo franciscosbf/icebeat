@@ -724,10 +724,12 @@ class Music(commands.Cog):
             player.add(tracks[i], requester=interaction.user.id)
 
         if len(tracks) == 1 and result.load_type != lavalink.LoadType.PLAYLIST:
-            duration = _milli_to_human_readable(tracks[0].duration)
+            track = tracks[0]
+            track_link = _format_hyperlink(track.title, track.uri)
+            duration = _milli_to_human_readable(track.duration)
             embed = Embed(
-                title="Track enqueued with success",
-                description=f"**{_format_hyperlink(tracks[0].title, tracks[0].uri)}** ┃ `{duration}`",
+                title="Track was enqueued",
+                description=f"**{track_link}** ┃ `{duration}`",
                 color=Color.green(),
             )
         else:
@@ -739,21 +741,24 @@ class Music(commands.Cog):
                 and type(ptype) is str
             ):
                 collection_type = ptype.capitalize()
+            collection_link = _format_hyperlink(result.playlist_info.name, query)
             embed = Embed(
-                title=f"Enqueued {n_enqueued_tracks} track{'s' if free_queue_slots > 1 else ''} with success",
-                description=f"**{collection_type}:** **{_format_hyperlink(result.playlist_info.name, query)}**",
+                title=f"{n_enqueued_tracks} track{'s' if free_queue_slots > 1 else ''} were enqueued",
+                description=f"**{collection_type}:** **{collection_link}**",
                 color=Color.green(),
             )
             if n_enqueued_tracks < n_retrieved_tracks:
                 embed.set_footer(
-                    text=f"Were retrieved {n_retrieved_tracks} track"
-                    f"{'s' if n_retrieved_tracks > 1 else ''} from the playlist, although\n"
-                    f"the queue has reached its full capacity ({player.max_queue_size} tracks)"
+                    text=f"It contains {n_retrieved_tracks} track"
+                    f"{'s' if n_retrieved_tracks > 1 else ''}, although the queue has\n"
+                    f"reached its full capacity ({player.max_queue_size} track"
+                    f"{'s' if player.max_queue_size > 1 else ''})"
                 )
-        await interaction.followup.send(embed=embed)
 
         if not player.is_playing:
             await player.play()
+
+        await interaction.followup.send(embed=embed)
 
     @play.autocomplete("query")
     @_is_whitelisted()
@@ -1061,10 +1066,11 @@ class Music(commands.Cog):
         )
         max_time = _milli_to_human_readable(current_track.duration)
         player_bar = f"`{current_time}` ┃{''.join(adjusted_bar)}┃ `{max_time}`"
+        track_link = _format_hyperlink(current_track.title, current_track.uri)
         embed = Embed(
             title=f"Playing at <#{voice_client.channel.id}>"
             f"{' (paused)' if player.paused else ''}",
-            description=f"**{_format_hyperlink(current_track.title, current_track.uri)}**\n\n"
+            description=f"**{track_link}**\n\n"
             f"{player_bar}\n\n**Enqueued by** <@{current_track.requester}>",
             color=Color.green(),
         )
