@@ -14,7 +14,9 @@ _DEFAULT_TTL = 3600
 class TimedCache(Cache):
     __slots__ = ("_cache",)
 
-    def __init__(self, entries: Optional[int], ttl: Optional[int]) -> None:
+    def __init__(
+        self, entries: Optional[int] = None, ttl: Optional[int] = None
+    ) -> None:
         if not entries:
             entries = _DEFAULT_ENTRIES
         if not ttl:
