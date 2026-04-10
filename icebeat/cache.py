@@ -5,10 +5,24 @@ from cachetools import TTLCache
 from .model import Guild, Whitelist
 from .store import Cache
 
-__all__ = ["TimedCache"]
+__all__ = ["CacheError", "InvalidEntriesError", "InvalidTtlError", "TimedCache"]
 
 _DEFAULT_ENTRIES = 100
 _DEFAULT_TTL = 3600
+
+
+class CacheError(Exception):
+    pass
+
+
+class InvalidEntriesError(CacheError):
+    def __init__(self) -> None:
+        super().__init__("entries must be greater than zero")
+
+
+class InvalidTtlError(CacheError):
+    def __init__(self) -> None:
+        super().__init__("ttl must be greater than zero")
 
 
 class TimedCache(Cache):
@@ -19,8 +33,13 @@ class TimedCache(Cache):
     ) -> None:
         if not entries:
             entries = _DEFAULT_ENTRIES
+        if entries < 1:
+            raise InvalidEntriesError()
+
         if not ttl:
             ttl = _DEFAULT_TTL
+        if ttl < 1:
+            raise InvalidTtlError()
 
         self._cache = TTLCache(entries, ttl)
 
