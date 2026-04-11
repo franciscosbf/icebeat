@@ -14,7 +14,7 @@ class IceBeatPlayerError(Exception):
 
 class InvalidQueueSize(IceBeatPlayerError):
     def __init__(self) -> None:
-        super().__init__("queue size must be greater than zero")
+        super().__init__("player queue size must be greater than zero")
 
 
 class QueueIsFull(IceBeatPlayerError):

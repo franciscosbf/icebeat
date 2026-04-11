@@ -18,12 +18,12 @@ class CooldownPresetError(Exception):
 
 class InvalidRateError(CooldownPresetError):
     def __init__(self) -> None:
-        super().__init__("rate must be greater than zero")
+        super().__init__("cooldown rate must be greater than zero")
 
 
 class InvalidTimeError(CooldownPresetError):
     def __init__(self) -> None:
-        super().__init__("time must be greater than zero")
+        super().__init__("cooldown time must be greater than zero")
 
 
 class CooldownPreset:

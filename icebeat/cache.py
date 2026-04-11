@@ -17,12 +17,12 @@ class CacheError(Exception):
 
 class InvalidEntriesError(CacheError):
     def __init__(self) -> None:
-        super().__init__("entries must be greater than zero")
+        super().__init__("number of cache entries must be greater than zero")
 
 
 class InvalidTtlError(CacheError):
     def __init__(self) -> None:
-        super().__init__("ttl must be greater than zero")
+        super().__init__("cache ttl (time to live) must be greater than zero")
 
 
 class TimedCache(Cache):
