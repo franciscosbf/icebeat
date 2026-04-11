@@ -1,10 +1,10 @@
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Self
+from typing import TYPE_CHECKING, Any, Callable
 
 from discord import Color, Embed, Guild
 from discord.ext import commands
 
-from ..ui import ContextPagination, Page
+from ..ui import ContextPagination, Page, compute_total_pages
 
 
 if TYPE_CHECKING:
@@ -38,18 +38,11 @@ class _SubcommandNotFound(commands.CommandError):
 
 
 class _WhitelistPage(Page):
-    __slots__ = ("_bot", "_prev_whitelist_len", "_whitelist_waiter")
+    __slots__ = ("_bot", "_whitelist_waiter")
 
-    def __init__(self, bot: "IceBeat", prev_whitelist_len: int) -> None:
+    def __init__(self, bot: "IceBeat") -> None:
         self._bot = bot
-        self._prev_whitelist_len = prev_whitelist_len
         self._whitelist_waiter = bot.store.whitelist_waiter()
-
-    @classmethod
-    async def create(cls, bot: "IceBeat") -> Self:
-        prev_whitelist_len = len((await bot.store.get_whitelist()).guild_ids)
-
-        return cls(bot, prev_whitelist_len)
 
     async def fetch(self, current_page: int) -> tuple[Embed, int, int]:
         whitelist = await self._bot.store.get_whitelist()
@@ -59,15 +52,11 @@ class _WhitelistPage(Page):
                 color=Color.green(),
             )
             return embed, 1, 1
-        whitelist_len = len(whitelist.guild_ids)
-        whitelist_update_warning = ""
-        if whitelist_len < self._prev_whitelist_len:
-            if current_page > 1:
-                whitelist_update_warning = (
-                    " (back to page 1 since whitelist was updated)"
-                )
-            current_page = 1
-        self._prev_whitelist_len = whitelist_len
+        total_pages = compute_total_pages(
+            len(whitelist.guild_ids), _WHITELIST_VIEW_PAGE_SIZE
+        )
+        if current_page > total_pages:
+            current_page = total_pages
         offset = (current_page - 1) * _WHITELIST_VIEW_PAGE_SIZE
         guilds = []
         for guild_id in list(whitelist.guild_ids)[
@@ -84,12 +73,8 @@ class _WhitelistPage(Page):
                 guild_id,
             )
 
-            total_pages = ContextPagination.compute_total_pages(
-                len(whitelist.guild_ids) - 1, _WHITELIST_VIEW_PAGE_SIZE
-            )
-            if total_pages < current_page:
-                current_page = total_pages
             return await self.fetch(current_page)
+
         embed = Embed(
             title="Whitelisted Servers",
             description="\n".join(
@@ -97,14 +82,7 @@ class _WhitelistPage(Page):
             ),
             color=Color.green(),
         )
-        if whitelist_update_warning:
-            embed.set_footer(text=whitelist_update_warning)
-        total_pages = ContextPagination.compute_total_pages(
-            len(whitelist.guild_ids), _WHITELIST_VIEW_PAGE_SIZE
-        )
-        embed.set_footer(
-            text=f"page {current_page}/{total_pages}{whitelist_update_warning}"
-        )
+        embed.set_footer(text=f"page {current_page}/{total_pages}")
         return embed, current_page, total_pages
 
     def unavailable_page_alert(self) -> Embed:
@@ -164,11 +142,9 @@ class Owner(commands.Cog):
         extras=_command_extras(emoji=":clipboard:"),
     )
     async def whitelist_show(self, ctx: commands.Context) -> None:
-        whitelist_page = await _WhitelistPage.create(self._bot)
-
         pagination = ContextPagination(
             _WHITELIST_VIEW_TIMEOUT,
-            whitelist_page,
+            _WhitelistPage(self._bot),
             ctx,
         )
         await pagination.navigate()
@@ -204,6 +180,8 @@ class Owner(commands.Cog):
         blacklisted = await self._bot.store.remove_from_whitelist(server.id)
 
         if blacklisted:
+            await self._bot.remove_app_commands_from_guild(server)
+
             embed = Embed(
                 title=f'Server "{server.name}" was removed from the whitelist',
                 color=Color.green(),
@@ -214,8 +192,6 @@ class Owner(commands.Cog):
             )
         embed.set_footer(text=f"Server ID: {server.id}")
         await ctx.reply(embed=embed)
-
-        await self._bot.remove_app_commands_from_guild(server)
 
     @whitelist.command(
         name="sync",
