@@ -14,8 +14,8 @@ __all__ = ["Owner"]
 
 __log__ = logging.getLogger(__name__)
 
-_WHITELIST_VIEW_TIMEOUT = 60.0
-_WHITELIST_VIEW_PAGE_SIZE = 6
+_WHITELIST_PAGINATION_TIMEOUT = 15.0
+_WHITELIST_PAGE_SIZE = 6
 
 
 def _cooldown() -> Callable[[commands.core.T], commands.core.T]:
@@ -53,14 +53,14 @@ class _WhitelistPage(Page):
             )
             return embed, 1, 1
         total_pages = compute_total_pages(
-            len(whitelist.guild_ids), _WHITELIST_VIEW_PAGE_SIZE
+            len(whitelist.guild_ids), _WHITELIST_PAGE_SIZE
         )
         if current_page > total_pages:
             current_page = total_pages
-        offset = (current_page - 1) * _WHITELIST_VIEW_PAGE_SIZE
+        offset = (current_page - 1) * _WHITELIST_PAGE_SIZE
         guilds = []
         for guild_id in list(whitelist.guild_ids)[
-            offset : offset + _WHITELIST_VIEW_PAGE_SIZE
+            offset : offset + _WHITELIST_PAGE_SIZE
         ]:
             if guild := self._bot.get_guild(guild_id):
                 guilds.append(guild)
@@ -143,7 +143,7 @@ class Owner(commands.Cog):
     )
     async def whitelist_show(self, ctx: commands.Context) -> None:
         pagination = ContextPagination(
-            _WHITELIST_VIEW_TIMEOUT,
+            _WHITELIST_PAGINATION_TIMEOUT,
             _WhitelistPage(self._bot),
             ctx,
         )
