@@ -7,9 +7,13 @@ from discord.ext import commands
 from discord.ui import Item, View, button
 
 
-__all__ = ["Page", "ContextPagination", "InteractionPagination"]
+__all__ = ["compute_total_pages", "Page", "ContextPagination", "InteractionPagination"]
 
 __log__ = logging.getLogger(__name__)
+
+
+def compute_total_pages(total_elements: int, elements_per_page: int) -> int:
+    return ((total_elements - 1) // elements_per_page) + 1
 
 
 class Page(ABC):
@@ -140,10 +144,6 @@ class _BasePagination(ABC, View):
 
         self._dispatch_dynamic_edit_page()
 
-    @staticmethod
-    def compute_total_pages(total_elements: int, elements_per_page: int) -> int:
-        return ((total_elements - 1) // elements_per_page) + 1
-
 
 class ContextPagination(_BasePagination):
     __slots__ = ("_ctx", "_msg")
@@ -202,4 +202,5 @@ class InteractionPagination(_BasePagination):
         )
 
     async def _edit_message(self, *, embed: Embed, view: Optional[View] = None) -> None:
-        await self._interaction.response.edit_message(embed=embed, view=view)
+        response = await self._interaction.original_response()
+        await response.edit(embed=embed, view=view)
