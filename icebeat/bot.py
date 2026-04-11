@@ -87,7 +87,7 @@ class IceBeat(commands.Bot):
         self.store = store
         self.conf = conf
 
-        self.lavalink_client: lavalink.Client = None  # pyright: ignore[reportAttributeAccessIssue]
+        self.lavalink_client: lavalink.Client
 
         self._tree_sync_events = TreeSyncEvents()
 
