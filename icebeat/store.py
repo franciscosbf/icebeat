@@ -3,6 +3,8 @@ import dataclasses
 from typing import Optional
 from copy import copy
 
+from icebeat.notify import Event, Waiter
+
 from .model import Filter, Guild, Whitelist
 
 __all__ = ["Cache", "Storage", "Store"]
@@ -74,9 +76,12 @@ class Storage(ABC):
 
 
 class Store:
+    __slots__ = ("_cache", "_storage", "_whitelist_notifier")
+
     def __init__(self, cache: Cache, storage: Storage) -> None:
         self._cache = cache
         self._storage = storage
+        self._whitelist_notifier = Event()
 
     async def get_guild(self, guild_id: int) -> Guild:
         guild = self._cache.get_guild(guild_id)
@@ -150,6 +155,9 @@ class Store:
 
         self._cache.invalidate_whitelist()
 
+        if inserted:
+            self._whitelist_notifier.notify()
+
         return inserted
 
     async def remove_from_whitelist(self, guild_id: int) -> bool:
@@ -157,4 +165,10 @@ class Store:
 
         self._cache.invalidate_whitelist()
 
+        if removed:
+            self._whitelist_notifier.notify()
+
         return removed
+
+    def whitelist_waiter(self) -> Waiter:
+        return self._whitelist_notifier.waiter()

@@ -1,10 +1,10 @@
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Self
 
 from discord import Color, Embed, Guild
 from discord.ext import commands
 
-from ..ui import ContextPagination
+from ..ui import ContextPagination, Page
 
 
 if TYPE_CHECKING:
@@ -14,9 +14,8 @@ __all__ = ["Owner"]
 
 __log__ = logging.getLogger(__name__)
 
-_WHITELIST_VIEW_TIMEOUT = 15.0
+_WHITELIST_VIEW_TIMEOUT = 60.0
 _WHITELIST_VIEW_PAGE_SIZE = 6
-_WHITELIST_DELETE_AFTER = 20.0
 
 
 def _cooldown() -> Callable[[commands.core.T], commands.core.T]:
@@ -38,15 +37,16 @@ class _SubcommandNotFound(commands.CommandError):
     pass
 
 
-class _WhitelistPage:
-    __slots__ = ("_bot", "_prev_whitelist_len")
+class _WhitelistPage(Page):
+    __slots__ = ("_bot", "_prev_whitelist_len", "_whitelist_waiter")
 
     def __init__(self, bot: "IceBeat", prev_whitelist_len: int) -> None:
         self._bot = bot
         self._prev_whitelist_len = prev_whitelist_len
+        self._whitelist_waiter = bot.store.whitelist_waiter()
 
     @classmethod
-    async def create(cls, bot: "IceBeat"):
+    async def create(cls, bot: "IceBeat") -> Self:
         prev_whitelist_len = len((await bot.store.get_whitelist()).guild_ids)
 
         return cls(bot, prev_whitelist_len)
@@ -56,7 +56,7 @@ class _WhitelistPage:
         if not whitelist.guild_ids:
             embed = Embed(
                 title="There aren't whitelisted servers",
-                color=Color.yellow(),
+                color=Color.green(),
             )
             return embed, 1, 1
         whitelist_len = len(whitelist.guild_ids)
@@ -107,6 +107,19 @@ class _WhitelistPage:
         )
         return embed, current_page, total_pages
 
+    def unavailable_page_alert(self) -> Embed:
+        return Embed(
+            title="Whitelist no longer available",
+            description=f"Type **/{Owner.whitelist_show.qualified_name}** to list whitelisted servers",
+            color=Color.green(),
+        )
+
+    async def wait_for_edit_request(self) -> None:
+        await self._whitelist_waiter.wait()
+
+    def cancel_edit_request(self) -> None:
+        self._whitelist_waiter.done()
+
 
 class Owner(commands.Cog):
     __slots__ = ("_bot",)
@@ -154,7 +167,9 @@ class Owner(commands.Cog):
         whitelist_page = await _WhitelistPage.create(self._bot)
 
         pagination = ContextPagination(
-            _WHITELIST_VIEW_TIMEOUT, whitelist_page.fetch, ctx, _WHITELIST_DELETE_AFTER
+            _WHITELIST_VIEW_TIMEOUT,
+            whitelist_page,
+            ctx,
         )
         await pagination.navigate()
 

@@ -1,57 +1,97 @@
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Coroutine
+import asyncio
 import logging
-from typing import Optional
-from discord import Button, ButtonStyle, Color, Embed, Interaction
+from typing import Optional, override
+from discord import Button, ButtonStyle, Embed, HTTPException, Interaction
 from discord.ext import commands
 from discord.ui import Item, View, button
 
 
-__all__ = ["FetchPage", "ContextPagination", "InteractionPagination"]
+__all__ = ["Page", "ContextPagination", "InteractionPagination"]
 
 __log__ = logging.getLogger(__name__)
 
 
-FetchPage = Callable[[int], Coroutine[None, None, tuple[Embed, int, int]]]
+class Page(ABC):
+    @abstractmethod
+    async def fetch(self, current_page: int) -> tuple[Embed, int, int]: ...
+
+    @abstractmethod
+    def unavailable_page_alert(self) -> Embed: ...
+
+    @abstractmethod
+    async def wait_for_edit_request(self) -> None: ...
+
+    @abstractmethod
+    def cancel_edit_request(self) -> None: ...
 
 
 class _BasePagination(ABC, View):
-    __slots__ = ("_delete_after", "_fetch_page", "_current_page", "_total_pages")
+    __slots__ = (
+        "_navigated",
+        "_page",
+        "_current_page",
+        "_total_pages",
+        "_edit_page_lock",
+        "_dynamic_edit_page_task",
+    )
 
-    def __init__(
-        self, timeout: float, delete_after: Optional[float], fetch_page: FetchPage
-    ):
+    def __init__(self, timeout: float, page: Page) -> None:
         super().__init__(timeout=timeout)
 
-        self._delete_after = delete_after
-        self._fetch_page = fetch_page
+        self._navigated = False
+        self._page = page
         self._current_page = 1
         self._total_pages = 1
+        self._edit_page_lock = asyncio.Lock()
+        self._dynamic_edit_page_task: asyncio.Task
 
     @abstractmethod
     async def _send_message(
         self,
         *,
         embed: Embed,
-        view: Optional[View] = None,
-        delete_after: Optional[float],
+        view: View,
     ) -> None: ...
 
     @abstractmethod
-    async def _edit_message(self, *, embed: Embed, view: View) -> None: ...
+    async def _edit_message(
+        self, *, embed: Embed, view: Optional[View] = None
+    ) -> None: ...
 
     def _update_buttons(self):
         self.children[0].disabled = self._current_page == 1  # pyright: ignore[reportAttributeAccessIssue]
         self.children[1].disabled = self._current_page == self._total_pages  # pyright: ignore[reportAttributeAccessIssue]
 
-    async def _edit_page(self, interaction: Interaction):
-        emb, self._current_page, self._total_pages = await self._fetch_page(
+    async def _update_view(self) -> Embed:
+        embed, self._current_page, self._total_pages = await self._page.fetch(
             self._current_page
         )
 
         self._update_buttons()
 
-        await interaction.response.edit_message(embed=emb, view=self)
+        return embed
+
+    async def _edit_page(self, interaction: Interaction):
+        async with self._edit_page_lock:
+            embed = await self._update_view()
+            await interaction.response.edit_message(embed=embed, view=self)
+
+    def _dispatch_dynamic_edit_page(self) -> None:
+        async def dynamic_edit_page():
+            try:
+                while True:
+                    await self._page.wait_for_edit_request()
+
+                    async with self._edit_page_lock:
+                        embed = await self._update_view()
+                        await self._edit_message(embed=embed, view=self)
+            except asyncio.CancelledError:
+                self._page.cancel_edit_request()
+            except Exception as e:
+                __log__.warning("Dynamic page edition raised an error: %s", e)
+
+        self._dynamic_edit_page_task = asyncio.create_task(dynamic_edit_page())
 
     @button(label="Previous", style=ButtonStyle.gray)  # pyright: ignore[reportArgumentType]
     async def previous(self, interaction: Interaction, button: Button) -> None:
@@ -69,29 +109,36 @@ class _BasePagination(ABC, View):
 
         await self._edit_page(interaction)
 
+    @override
     async def on_error(
         self, interaction: Interaction, error: Exception, item: Item, /
     ) -> None:
         _ = item
 
+        self._dynamic_edit_page_task.cancel()
+
         __log__.warning(f"Paginated view has failed: {error}")
 
-        embed = Embed(title="Something unexpected has happened", color=Color.red())
-        await interaction.response.edit_message(embed=embed, view=None)
+        if not isinstance(error, HTTPException):
+            embed = self._page.unavailable_page_alert()
+            await interaction.response.edit_message(embed=embed, view=None)
+
+    @override
+    async def on_timeout(self) -> None:
+        self._dynamic_edit_page_task.cancel()
+
+        embed = self._page.unavailable_page_alert()
+        await self._edit_message(embed=embed)
 
     async def navigate(self):
-        embed, self._current_page, self._total_pages = await self._fetch_page(
-            self._current_page
-        )
+        if self._navigated:
+            return
+        self._navigated = True
 
-        if self._total_pages == 1:
-            await self._send_message(embed=embed, delete_after=self._delete_after)
-        elif self._total_pages > 1:
-            self._update_buttons()
+        embed = await self._update_view()
+        await self._send_message(embed=embed, view=self)
 
-            await self._send_message(
-                embed=embed, view=self, delete_after=self._delete_after
-            )
+        self._dispatch_dynamic_edit_page()
 
     @staticmethod
     def compute_total_pages(total_elements: int, elements_per_page: int) -> int:
@@ -104,35 +151,26 @@ class ContextPagination(_BasePagination):
     def __init__(
         self,
         timeout: float,
-        fetch_page: FetchPage,
+        page: Page,
         ctx: commands.Context,
-        delete_after: Optional[float] = None,
     ) -> None:
-        super().__init__(timeout, delete_after, fetch_page)
+        super().__init__(timeout, page)
 
         self._ctx = ctx
 
+    @override
     async def interaction_check(self, interaction: Interaction) -> bool:
         return self._ctx.author.id == interaction.user.id
-
-    async def on_timeout(self):
-        await self._msg.edit(view=None)
 
     async def _send_message(
         self,
         *,
         embed: Embed,
-        view: Optional[View] = None,
-        delete_after: Optional[float] = None,
+        view: View,
     ) -> None:
-        self._msg = await self._ctx.reply(
-            embed=embed,
-            view=view,  # pyright: ignore[reportArgumentType, reportCallIssue]
-            ephemeral=True,
-            delete_after=delete_after,  # pyright: ignore[reportArgumentType]
-        )
+        self._msg = await self._ctx.reply(embed=embed, view=view)
 
-    async def _edit_message(self, *, embed: Embed, view: View) -> None:
+    async def _edit_message(self, *, embed: Embed, view: Optional[View] = None) -> None:
         await self._msg.edit(embed=embed, view=view)
 
 
@@ -142,34 +180,26 @@ class InteractionPagination(_BasePagination):
     def __init__(
         self,
         timeout: float,
-        fetch_page: FetchPage,
+        page: Page,
         interaction: Interaction,
-        delete_after: Optional[float] = None,
     ) -> None:
-        super().__init__(timeout, delete_after, fetch_page)
+        super().__init__(timeout, page)
 
         self._interaction = interaction
 
+    @override
     async def interaction_check(self, interaction: Interaction) -> bool:
         return self._interaction.user.id == interaction.user.id
-
-    async def on_timeout(self):
-        original_response = await self._interaction.original_response()
-        await original_response.edit(view=None)
 
     async def _send_message(
         self,
         *,
         embed: Embed,
-        view: Optional[View] = None,
-        delete_after: Optional[float],
+        view: View,
     ) -> None:
         await self._interaction.response.send_message(
-            embed=embed,
-            view=view,  # pyright: ignore[reportArgumentType, reportCallIssue]
-            ephemeral=True,
-            delete_after=delete_after,  # pyright: ignore[reportArgumentType]
+            embed=embed, view=view, ephemeral=True
         )
 
-    async def _edit_message(self, *, embed: Embed, view: View) -> None:
+    async def _edit_message(self, *, embed: Embed, view: Optional[View] = None) -> None:
         await self._interaction.response.edit_message(embed=embed, view=view)
