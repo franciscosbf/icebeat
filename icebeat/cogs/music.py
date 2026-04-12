@@ -26,9 +26,11 @@ from discord.types.voice import (
 from discord.ext import commands
 import lavalink
 
+from icebeat.ui import InteractionPagination, Page, compute_total_pages
+
 
 from ..model import Filter
-from ..player import IceBeatPlayer
+from ..player import IceBeatPlayer, Queue
 from ..treesync import (
     AppCommands,
     RegisteredAppCommands,
@@ -56,6 +58,8 @@ _DEFAULT_USER_PERMISSIONS = Permissions(
     use_application_commands=True,
 )
 _PLAYER_BAR_SIZE = 20
+_QUEUE_PAGINATION_TIMEOUT = 40.0
+_QUEUE_PAGE_SIZE = 6
 _ORDINAL_SUFFIX = (
     "th",
     "st",
@@ -507,10 +511,79 @@ def _to_ordinal(value: int) -> str:
 
 
 @dataclass
-class _StaffCommand:
+class _CommandInfo:
     id: int
     qualified_name: str
     description: str
+
+
+class _QueuePage(Page):
+    __slots__ = ("_player_manager", "_player", "_queue_waiter")
+
+    def __init__(
+        self,
+        bot: IceBeat,
+        guild: Snowflake,
+    ) -> None:
+        self._player_manager = bot.lavalink_client.player_manager
+        self._player: IceBeatPlayer = self._player_manager.get(guild.id)  # pyright: ignore[reportAttributeAccessIssue]
+        self._queue_waiter = self._player.queue.waiter()
+
+    def _unavailable_page_alert(self) -> Embed:
+        return Embed(
+            title="Queue list is no longer available",
+            description=f"Type **/{Music.queue.qualified_name}** to list queued tracks",
+            color=Color.green(),
+        )
+
+    def _valid_player(self) -> bool:
+        return self._player is self._player_manager.get(self._player.guild_id)
+
+    async def fetch(self, current_page: int) -> tuple[Embed, int, int, bool]:
+        if not self._valid_player():
+            return self._unavailable_page_alert(), 1, 1, True
+
+        if not (queue := self._player.queue):
+            embed = Embed(
+                title="Queue is empty",
+                color=Color.green(),
+            )
+            return embed, 1, 1, True
+        queue_len = len(queue)
+        total_pages = compute_total_pages(queue_len, _QUEUE_PAGE_SIZE)
+        if current_page > total_pages:
+            current_page = total_pages
+        offset = (current_page - 1) * _QUEUE_PAGE_SIZE
+        queue_page = enumerate(
+            queue[offset : offset + _QUEUE_PAGE_SIZE], start=offset + 1
+        )
+
+        pos_padding = len(str(queue_len))
+        queue_entry_fmt = "`{{:>{}}}.` **{{}}** [{{}}]".format(pos_padding)
+        embed = Embed(
+            title="Enqueued Tracks",
+            description="\n".join(
+                queue_entry_fmt.format(
+                    pos,
+                    _format_hyperlink(track.title, track.uri),
+                    _milli_to_human_readable(track.duration),
+                    track.requester,
+                )
+                for pos, track in queue_page
+            ),
+            color=Color.green(),
+        )
+        embed.set_footer(text=f"page {current_page}/{total_pages}")
+        return embed, current_page, total_pages, False
+
+    def unavailable_page_alert(self) -> Embed:
+        return self._unavailable_page_alert()
+
+    async def wait_for_edit_request(self) -> None:
+        await self._queue_waiter.wait()
+
+    def cancel_edit_request(self) -> None:
+        self._queue_waiter.done()
 
 
 class Music(commands.Cog):
@@ -518,7 +591,7 @@ class Music(commands.Cog):
         "_bot",
         "_lavalink_client",
         "_staff_commands",
-        "_cached_guild_staff_commands",
+        "_cached_guild_staff_commands_info",
     )
 
     def __init__(self, bot: "IceBeat") -> None:
@@ -527,13 +600,13 @@ class Music(commands.Cog):
         self._staff_commands: list[
             tuple[app_commands.Command, Optional[app_commands.Group]]
         ] = self._group_staff_commands()
-        self._cached_guild_staff_commands: dict[int, list[_StaffCommand]] = {}
+        self._cached_guild_staff_commands_info: dict[int, list[_CommandInfo]] = {}
 
         self._bot.lavalink_client = self._lavalink_client
 
     def _setup_lavalink(self) -> lavalink.Client:
         if queue_size := self._bot.conf.player.queue_size:
-            IceBeatPlayer.set_queue_size(queue_size)
+            Queue.set_max_size(queue_size)
 
         lavalink_client = lavalink.Client(self._bot.user.id, player=IceBeatPlayer)  # pyright: ignore reportOptionalMemberAccess
 
@@ -576,7 +649,7 @@ class Music(commands.Cog):
 
         return staff_commands
 
-    def _add_cached_guild_staff_commands(
+    def _add_cached_guild_staff_commands_info(
         self, guild: Snowflake, guild_app_commands: AppCommands
     ) -> None:
         cached_staff_commands = []
@@ -585,21 +658,21 @@ class Music(commands.Cog):
             if not (guild_app_command := guild_app_commands.get(name)):
                 return
             cached_staff_commands.append(
-                _StaffCommand(
+                _CommandInfo(
                     guild_app_command.id,
                     command.qualified_name,
                     command.description,
                 )
             )
-        self._cached_guild_staff_commands[guild.id] = cached_staff_commands
+        self._cached_guild_staff_commands_info[guild.id] = cached_staff_commands
 
-    def _get_cached_guild_staff_commands(
+    def _get_cached_guild_staff_commands_info(
         self, guild: Snowflake
-    ) -> Optional[list[_StaffCommand]]:
-        return self._cached_guild_staff_commands.get(guild.id)
+    ) -> Optional[list[_CommandInfo]]:
+        return self._cached_guild_staff_commands_info.get(guild.id)
 
-    def _remove_cached_guild_staff_commands(self, guild: Snowflake) -> None:
-        self._cached_guild_staff_commands.pop(guild.id)
+    def _remove_cached_guild_staff_commands_info(self, guild: Snowflake) -> None:
+        self._cached_guild_staff_commands_info.pop(guild.id, None)
 
     async def _decide_bot_presence(self, guild_id: int) -> None:
         guild = self._bot.get_guild(guild_id)
@@ -625,7 +698,6 @@ class Music(commands.Cog):
     async def _disconnect_bot(
         self, player: IceBeatPlayer, voice_client: _LavalinkVoiceClient
     ) -> None:
-        player.queue.clear()
         await player.stop()
 
         await voice_client.disconnect(force=True)
@@ -636,11 +708,11 @@ class Music(commands.Cog):
 
     @tree_sync_listener(RegisteredAppCommands)
     async def on_registered_app_commands(self, event: RegisteredAppCommands) -> None:
-        self._add_cached_guild_staff_commands(event.guild, event.commands)
+        self._add_cached_guild_staff_commands_info(event.guild, event.commands)
 
     @tree_sync_listener(RemovedAppCommands)
-    async def on_unregistered_app_commands(self, event: RemovedAppCommands) -> None:
-        self._remove_cached_guild_staff_commands(event.guild)
+    async def on_removed_app_commands(self, event: RemovedAppCommands) -> None:
+        self._remove_cached_guild_staff_commands_info(event.guild)
 
     @lavalink.listener(lavalink.TrackStartEvent)
     async def on_track_start(self, event: lavalink.TrackStartEvent) -> None:
@@ -747,10 +819,10 @@ class Music(commands.Cog):
     async def play(self, interaction: Interaction, query: str) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
-        if player.is_queue_full():
+        if player.queue.is_full():
             embed = Embed(title="Queue is full", color=Color.green())
             embed.set_footer(
-                text=f"Queue only supports up to {player.max_queue_size} tracks"
+                text=f"Queue only supports up to {player.queue.max_size} tracks"
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -806,7 +878,7 @@ class Music(commands.Cog):
                 await interaction.followup.send(embed=embed)
                 return
 
-        free_queue_slots = player.free_queue_slots
+        free_queue_slots = player.queue.free_slots
 
         n_retrieved_tracks = len(tracks)
         n_enqueued_tracks = min(free_queue_slots, n_retrieved_tracks)
@@ -841,8 +913,8 @@ class Music(commands.Cog):
                 embed.set_footer(
                     text=f"It contains {n_retrieved_tracks} track"
                     f"{'s' if n_retrieved_tracks > 1 else ''}, although the queue has\n"
-                    f"reached its full capacity ({player.max_queue_size} track"
-                    f"{'s' if player.max_queue_size > 1 else ''})"
+                    f"reached its full capacity ({player.queue.max_size} track"
+                    f"{'s' if player.queue.max_size > 1 else ''})"
                 )
 
         if not player.is_playing:
@@ -997,7 +1069,7 @@ class Music(commands.Cog):
             ordinal_position = _to_ordinal(position)
             if position <= queue_size:
                 if position > 1:
-                    player.queue = player.queue[position - 1 :]
+                    player.queue.shrink(position - 1)
                 next_track = player.queue[0]
 
                 await player.skip()
@@ -1180,11 +1252,12 @@ class Music(commands.Cog):
     @_cooldown()
     @_ensure_player_is_ready(bypass_presence_check=True)
     async def queue(self, interaction: Interaction) -> None:
-        _ = interaction
-        # TODO: implement
-        await interaction.response.send_message(
-            content="Not implemented", ephemeral=True
+        pagination = InteractionPagination(
+            _QUEUE_PAGINATION_TIMEOUT,
+            _QueuePage(self._bot, interaction.guild),  # pyright: ignore[reportArgumentType]
+            interaction,
         )
+        await pagination.navigate()
 
     @app_commands.command(description="Removes all queued tracks")
     @app_commands.guild_only()
@@ -1192,11 +1265,11 @@ class Music(commands.Cog):
     @_is_whitelisted()
     @_cooldown()
     @_ensure_player_is_ready(bypass_presence_check=True)
-    async def wipe(self, interaction: Interaction) -> None:
+    async def clear(self, interaction: Interaction) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         if player.queue:
-            player.queue = []
+            player.queue.clear()
 
             embed = Embed(
                 title="The queue is now empty",
@@ -1425,7 +1498,7 @@ class Music(commands.Cog):
     @_is_whitelisted()
     @_cooldown()
     async def staff_commands(self, interaction: Interaction) -> None:
-        if commands := self._get_cached_guild_staff_commands(interaction.guild):  # pyright: ignore[reportArgumentType]
+        if commands := self._get_cached_guild_staff_commands_info(interaction.guild):  # pyright: ignore[reportArgumentType]
             fmted_commands = "\n".join(
                 f"┌ </{command.qualified_name}:{command.id}>\n└ {command.description}"
                 for command in commands

@@ -44,14 +44,14 @@ class _WhitelistPage(Page):
         self._bot = bot
         self._whitelist_waiter = bot.store.whitelist_waiter()
 
-    async def fetch(self, current_page: int) -> tuple[Embed, int, int]:
+    async def fetch(self, current_page: int) -> tuple[Embed, int, int, bool]:
         whitelist = await self._bot.store.get_whitelist()
         if not whitelist.guild_ids:
             embed = Embed(
                 title="There aren't whitelisted servers",
                 color=Color.green(),
             )
-            return embed, 1, 1
+            return embed, 1, 1, True
         total_pages = compute_total_pages(
             len(whitelist.guild_ids), _WHITELIST_PAGE_SIZE
         )
@@ -83,7 +83,7 @@ class _WhitelistPage(Page):
             color=Color.green(),
         )
         embed.set_footer(text=f"page {current_page}/{total_pages}")
-        return embed, current_page, total_pages
+        return embed, current_page, total_pages, False
 
     def unavailable_page_alert(self) -> Embed:
         return Embed(

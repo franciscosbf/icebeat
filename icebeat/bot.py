@@ -65,9 +65,7 @@ class IceBeat(commands.Bot):
             conf.bot.description if conf.bot.description else _DEFAULT_DESCRIPTION
         )
         activity = Activity(
-            name=conf.bot.activity_name
-            if conf.bot.activity_name
-            else _DEFAULT_ACTIVITY_NAME,
+            name=conf.bot.activity if conf.bot.activity else _DEFAULT_ACTIVITY_NAME,
             type=ActivityType.listening,
         )
         super().__init__(

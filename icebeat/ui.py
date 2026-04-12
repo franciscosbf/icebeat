@@ -5,6 +5,7 @@ from typing import Optional, override
 from discord import Button, ButtonStyle, Embed, HTTPException, Interaction
 from discord.ext import commands
 from discord.ui import Item, View, button
+from discord.utils import MISSING
 
 
 __all__ = ["compute_total_pages", "Page", "ContextPagination", "InteractionPagination"]
@@ -18,7 +19,7 @@ def compute_total_pages(total_elements: int, elements_per_page: int) -> int:
 
 class Page(ABC):
     @abstractmethod
-    async def fetch(self, current_page: int) -> tuple[Embed, int, int]: ...
+    async def fetch(self, current_page: int) -> tuple[Embed, int, int, bool]: ...
 
     @abstractmethod
     def unavailable_page_alert(self) -> Embed: ...
@@ -59,27 +60,27 @@ class _BasePagination(ABC, View):
     ) -> None: ...
 
     @abstractmethod
-    async def _edit_message(
-        self, *, embed: Embed, view: Optional[View] = None
-    ) -> None: ...
+    async def _edit_message(self, *, embed: Embed, view: Optional[View]) -> None: ...
 
-    def _update_buttons(self):
+    def _update_buttons(self) -> None:
         self.children[0].disabled = self._current_page == 1  # pyright: ignore[reportAttributeAccessIssue]
         self.children[1].disabled = self._current_page == self._total_pages  # pyright: ignore[reportAttributeAccessIssue]
 
-    async def _update_view(self) -> Embed:
-        embed, self._current_page, self._total_pages = await self._page.fetch(
+    async def _update_page(self) -> tuple[Embed, bool]:
+        embed, self._current_page, self._total_pages, empty = await self._page.fetch(
             self._current_page
         )
 
         self._update_buttons()
 
-        return embed
+        return embed, empty
 
     async def _edit_page(self, interaction: Interaction):
         async with self._edit_page_lock:
-            embed = await self._update_view()
-            await interaction.response.edit_message(embed=embed, view=self)
+            embed, empty = await self._update_page()
+            await interaction.response.edit_message(
+                embed=embed, view=None if empty else self
+            )
 
     def _dispatch_dynamic_edit_page(self) -> None:
         async def dynamic_edit_page():
@@ -88,8 +89,10 @@ class _BasePagination(ABC, View):
                     await self._page.wait_for_edit_request()
 
                     async with self._edit_page_lock:
-                        embed = await self._update_view()
-                        await self._edit_message(embed=embed, view=self)
+                        embed, empty = await self._update_page()
+                        await self._edit_message(
+                            embed=embed, view=None if empty else self
+                        )
             except asyncio.CancelledError:
                 self._page.cancel_edit_request()
             except Exception as e:
@@ -123,24 +126,26 @@ class _BasePagination(ABC, View):
 
         __log__.warning(f"Paginated view has failed: {error}")
 
-        if not isinstance(error, HTTPException):
-            embed = self._page.unavailable_page_alert()
-            await interaction.response.edit_message(embed=embed, view=None)
+        if isinstance(error, HTTPException):
+            return
+
+        embed = self._page.unavailable_page_alert()
+        await interaction.response.edit_message(embed=embed, view=None)
 
     @override
     async def on_timeout(self) -> None:
         self._dynamic_edit_page_task.cancel()
 
         embed = self._page.unavailable_page_alert()
-        await self._edit_message(embed=embed)
+        await self._edit_message(embed=embed, view=None)
 
     async def navigate(self):
         if self._navigated:
             return
         self._navigated = True
 
-        embed = await self._update_view()
-        await self._send_message(embed=embed, view=self)
+        embed, empty = await self._update_page()
+        await self._send_message(embed=embed, view=MISSING if empty else self)
 
         self._dispatch_dynamic_edit_page()
 
@@ -168,9 +173,12 @@ class ContextPagination(_BasePagination):
         embed: Embed,
         view: View,
     ) -> None:
-        self._msg = await self._ctx.reply(embed=embed, view=view)
+        self._msg = await self._ctx.reply(
+            embed=embed,
+            view=view,
+        )
 
-    async def _edit_message(self, *, embed: Embed, view: Optional[View] = None) -> None:
+    async def _edit_message(self, *, embed: Embed, view: Optional[View]) -> None:
         await self._msg.edit(embed=embed, view=view)
 
 
@@ -198,9 +206,11 @@ class InteractionPagination(_BasePagination):
         view: View,
     ) -> None:
         await self._interaction.response.send_message(
-            embed=embed, view=view, ephemeral=True
+            embed=embed,
+            view=view,
+            ephemeral=True,
         )
 
-    async def _edit_message(self, *, embed: Embed, view: Optional[View] = None) -> None:
+    async def _edit_message(self, *, embed: Embed, view: Optional[View]) -> None:
         response = await self._interaction.original_response()
         await response.edit(embed=embed, view=view)
