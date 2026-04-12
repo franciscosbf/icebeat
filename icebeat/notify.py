@@ -49,7 +49,10 @@ class Waiter:
         return True
 
     def done(self) -> None:
+        if self._done:
+            return
         self._done = True
+
         self._notify()
 
         self._event._delete(self)
