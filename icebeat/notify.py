@@ -4,23 +4,47 @@ __all__ = ["Waiter", "Event"]
 import asyncio
 
 
+class _Signal:
+    __slots__ = (
+        "_active",
+        "_fut",
+    )
+
+    def __init__(self) -> None:
+        self._active = False
+        self._fut = asyncio.Future()
+
+    def set(self) -> None:
+        if self._active:
+            return
+        self._active = True
+
+        if not self._fut.done():
+            self._fut.set_result(None)
+        self._fut = asyncio.Future()
+
+    async def wait(self) -> None:
+        await self._fut
+
+        self._active = False
+
+
 class Waiter:
-    __slots__ = ("_event", "_aevent", "_done")
+    __slots__ = ("_event", "_signal", "_done")
 
     def __init__(self, event: "Event") -> None:
         self._event = event
-        self._aevent = asyncio.Event()
+        self._signal = _Signal()
         self._done = False
 
     def _notify(self) -> None:
-        self._aevent.set()
+        self._signal.set()
 
     async def wait(self) -> bool:
         if self._done:
             return False
 
-        await self._aevent.wait()
-        self._aevent.clear()
+        await self._signal.wait()
 
         return True
 
