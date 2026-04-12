@@ -1,4 +1,4 @@
-from typing import SupportsIndex
+from typing import Optional, SupportsIndex
 from discord.utils import classproperty
 from typing_extensions import override
 import lavalink
@@ -112,13 +112,35 @@ class Queue(list[lavalink.AudioTrack]):
 
 
 class IceBeatPlayer(lavalink.DefaultPlayer):
+    __slots__ = (
+        "_current",
+        "_current_notifier",
+    )
+
     def __init__(self, guild_id: int, node: lavalink.Node) -> None:
+        # Hacky solution to hijack queue to notify on changes.
+        self._current: Optional[lavalink.AudioTrack] = None
+        self._current_notifier = Event()
+
         super().__init__(guild_id, node)
 
-        # Hacky solution to hijack queue and notify when it changes. It only targets
-        # mutations performed by lavalink.DefaultPlayer itself and Music cog.
+        # Hacky solution to hijack current track to notify on changes.
         self.queue: Queue = Queue()  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @override
     def cleanup(self):
+        self.current = None
         self.queue.clear()
+
+    def current_waiter(self) -> Waiter:
+        return self._current_notifier.waiter()
+
+    @property
+    def current(self) -> Optional[lavalink.AudioTrack]:
+        return self._current
+
+    @current.setter
+    def current(self, track: Optional[lavalink.AudioTrack]) -> None:
+        self._current = track
+
+        self._current_notifier.notify()

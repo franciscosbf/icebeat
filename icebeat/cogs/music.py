@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from typing import TYPE_CHECKING, Callable, Optional, Union
@@ -26,6 +27,7 @@ from discord.types.voice import (
 from discord.ext import commands
 import lavalink
 
+from icebeat.notify import Waiter
 from icebeat.ui import InteractionPagination, Page, compute_total_pages
 
 
@@ -60,6 +62,8 @@ _DEFAULT_USER_PERMISSIONS = Permissions(
 _PLAYER_BAR_SIZE = 20
 _QUEUE_PAGINATION_TIMEOUT = 40.0
 _QUEUE_PAGE_SIZE = 6
+_CURRENT_TRACK_MSG_TIMEOUT = 16.0
+_CURRENT_TRACK_MSG_EDIT_TIMEOUT = 1.0
 _ORDINAL_SUFFIX = (
     "th",
     "st",
@@ -1120,7 +1124,7 @@ class Music(commands.Cog):
                 player.queue.pop(position - 1)
 
                 embed = Embed(
-                    title=f"Successfully popped the {ordinal_position} track from queue",
+                    title=f"Successfully removed {ordinal_position} track from queue",
                     description=f"**[{removed_track.title}]({removed_track.uri})**",
                     color=Color.green(),
                 )
@@ -1216,34 +1220,65 @@ class Music(commands.Cog):
     @_is_playing()
     @_ensure_player_is_ready()
     async def current(self, interaction: Interaction) -> None:
-        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        def build_message() -> Embed:
+            player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+            voice_client: _LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
+            current_track: lavalink.AudioTrack = player.current  # pyright: ignore[reportAssignmentType]
+            position = player.position
+            current_time = _milli_to_human_readable(position)
+            adjusted_bar = ["─"] * _PLAYER_BAR_SIZE
+            adjusted_bar[
+                int((position * _PLAYER_BAR_SIZE) / current_track.duration)
+            ] = ":white_circle:"
+            max_time = _milli_to_human_readable(current_track.duration)
+            player_bar = f"`{current_time}` ┃{''.join(adjusted_bar)}┃ `{max_time}`"
+            track_link = _format_hyperlink(current_track.title, current_track.uri)
+            embed = Embed(
+                title=f"Playing at <#{voice_client.channel.id}>"
+                f"{' (paused)' if player.paused else ''}",
+                description=f"**{track_link}**\n\n"
+                f"{player_bar}\n\n**Enqueued by** <@{current_track.requester}>",
+                color=Color.green(),
+            )
+            if player.queue:
+                queue_size = len(player.queue)
+                if queue_size > 1:
+                    text = f"There're {queue_size} tracks in queue"
+                else:
+                    text = "There's 1 track in queue"
+                embed.set_footer(text=text)
+            return embed
 
-        voice_client: _LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
-        current_track: lavalink.AudioTrack = player.current  # pyright: ignore[reportAssignmentType]
-        position = player.position
-        current_time = _milli_to_human_readable(position)
-        adjusted_bar = ["─"] * _PLAYER_BAR_SIZE
-        adjusted_bar[int((position * _PLAYER_BAR_SIZE) / current_track.duration)] = (
-            ":white_circle:"
-        )
-        max_time = _milli_to_human_readable(current_track.duration)
-        player_bar = f"`{current_time}` ┃{''.join(adjusted_bar)}┃ `{max_time}`"
-        track_link = _format_hyperlink(current_track.title, current_track.uri)
-        embed = Embed(
-            title=f"Playing at <#{voice_client.channel.id}>"
-            f"{' (paused)' if player.paused else ''}",
-            description=f"**{track_link}**\n\n"
-            f"{player_bar}\n\n**Enqueued by** <@{current_track.requester}>",
-            color=Color.green(),
-        )
-        if player.queue:
-            queue_size = len(player.queue)
-            if queue_size > 1:
-                text = f"There're {queue_size} tracks in queue"
-            else:
-                text = "There's 1 track in queue"
-            embed.set_footer(text=text)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        async def dispatch_message_edit() -> None:
+            waiter: Optional[Waiter] = None
+            try:
+                response = await interaction.original_response()
+                msg_timeout = asyncio.create_task(
+                    asyncio.sleep(_CURRENT_TRACK_MSG_TIMEOUT)
+                )
+                if player := self._get_player(interaction):
+                    waiter = player.current_waiter()
+                    while True:
+                        edit_timeout = asyncio.create_task(
+                            asyncio.sleep(_CURRENT_TRACK_MSG_EDIT_TIMEOUT)
+                        )
+                        wait_for_update = asyncio.create_task(waiter.wait())
+                        done, _ = await asyncio.wait(
+                            (msg_timeout, edit_timeout, wait_for_update),
+                            return_when=asyncio.FIRST_COMPLETED,
+                        )
+                        if msg_timeout in done or not player.is_playing:
+                            break
+                        await response.edit(embed=build_message())
+                await response.delete()
+            except Exception:
+                pass
+            finally:
+                if waiter:
+                    waiter.done()
+
+        await interaction.response.send_message(embed=build_message(), ephemeral=True)
+        asyncio.create_task(dispatch_message_edit())
 
     @app_commands.command(description="Lists queued tracks")
     @app_commands.guild_only()
