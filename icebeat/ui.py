@@ -2,7 +2,14 @@ from abc import ABC, abstractmethod
 import asyncio
 import logging
 from typing import Optional, override
-from discord import Button, ButtonStyle, Embed, HTTPException, Interaction
+from discord import (
+    Button,
+    ButtonStyle,
+    Embed,
+    HTTPException,
+    Interaction,
+    InteractionMessage,
+)
 from discord.ext import commands
 from discord.ui import Item, View, button
 from discord.utils import MISSING
@@ -70,6 +77,9 @@ class _BasePagination(ABC, View):
         embed, self._current_page, self._total_pages, empty = await self._page.fetch(
             self._current_page
         )
+        assert self._current_page > 0
+        assert self._total_pages > 0
+        assert self._current_page <= self._total_pages
 
         self._update_buttons()
 
@@ -82,6 +92,12 @@ class _BasePagination(ABC, View):
                 embed=embed, view=None if empty else self
             )
 
+    def _cancel_edit_page_task(self) -> None:
+        if self._dynamic_edit_page_task.cancelled():
+            return
+
+        self._dynamic_edit_page_task.cancel()
+
     def _dispatch_dynamic_edit_page(self) -> None:
         async def dynamic_edit_page():
             try:
@@ -93,10 +109,12 @@ class _BasePagination(ABC, View):
                         await self._edit_message(
                             embed=embed, view=None if empty else self
                         )
-            except asyncio.CancelledError:
-                self._page.cancel_edit_request()
+            except (asyncio.CancelledError, HTTPException):
+                pass
             except Exception as e:
                 __log__.warning("Dynamic page edition raised an error: %s", e)
+            finally:
+                self._page.cancel_edit_request()
 
         self._dynamic_edit_page_task = asyncio.create_task(dynamic_edit_page())
 
@@ -122,22 +140,30 @@ class _BasePagination(ABC, View):
     ) -> None:
         _ = item
 
-        self._dynamic_edit_page_task.cancel()
+        self._cancel_edit_page_task()
 
-        __log__.warning(f"Paginated view has failed: {error}")
+        self.stop()
 
         if isinstance(error, HTTPException):
             return
 
+        __log__.warning(f"Paginated view has failed: {error}")
+
         embed = self._page.unavailable_page_alert()
-        await interaction.response.edit_message(embed=embed, view=None)
+        try:
+            await interaction.response.edit_message(embed=embed, view=None)
+        except HTTPException:
+            pass
 
     @override
     async def on_timeout(self) -> None:
-        self._dynamic_edit_page_task.cancel()
+        self._cancel_edit_page_task()
 
         embed = self._page.unavailable_page_alert()
-        await self._edit_message(embed=embed, view=None)
+        try:
+            await self._edit_message(embed=embed, view=None)
+        except HTTPException:
+            pass
 
     async def navigate(self):
         if self._navigated:
@@ -183,7 +209,7 @@ class ContextPagination(_BasePagination):
 
 
 class InteractionPagination(_BasePagination):
-    __slots__ = ("_interaction",)
+    __slots__ = ("_interaction", "_response")
 
     def __init__(
         self,
@@ -194,6 +220,7 @@ class InteractionPagination(_BasePagination):
         super().__init__(timeout, page)
 
         self._interaction = interaction
+        self._response: Optional[InteractionMessage] = None
 
     @override
     async def interaction_check(self, interaction: Interaction) -> bool:
@@ -212,5 +239,7 @@ class InteractionPagination(_BasePagination):
         )
 
     async def _edit_message(self, *, embed: Embed, view: Optional[View]) -> None:
-        response = await self._interaction.original_response()
-        await response.edit(embed=embed, view=view)
+        if not self._response:
+            self._response = await self._interaction.original_response()
+
+        await self._response.edit(embed=embed, view=view)
