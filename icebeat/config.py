@@ -35,29 +35,29 @@ class InvalidField(ConfigError):
         super().__init__(f"field {field} has invalid type in section {section}")
 
 
-@dataclass
+@dataclass(frozen=True)
 class _Section(ABC):
     pass
 
 
-@dataclass
+@dataclass(frozen=True)
 class _OptionalSection(ABC):
     pass
 
 
-@dataclass
+@dataclass(frozen=True)
 class Bot(_Section):
     token: str
     description: Optional[str] = None
     activity: Optional[str] = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class Player(_OptionalSection):
     queue_size: Optional[int] = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class Lavalink(_Section):
     name: str
     host: str
@@ -66,24 +66,24 @@ class Lavalink(_Section):
     region: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class Cache(_OptionalSection):
     entries: Optional[int] = None
     ttl: Optional[int] = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class Database(_Section):
     uri: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class Commands(_OptionalSection):
     cooldown_rate: Optional[int] = None
     cooldown_time: Optional[int] = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class Config:
     bot: Bot
     player: Player
