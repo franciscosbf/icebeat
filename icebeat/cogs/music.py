@@ -1619,9 +1619,11 @@ class Music(commands.Cog):
     async def cog_app_command_error(
         self, interaction: Interaction, error: app_commands.AppCommandError
     ) -> None:
-        if isinstance(error, _GuildNotWhitelisted):
+        if isinstance(error, (HTTPException, NotFound)):
+            return
+        elif isinstance(error, _GuildNotWhitelisted):
             embed = Embed(
-                title="Server isn't whitelisted",
+                title="This server isn't whitelisted",
                 color=Color.yellow(),
             )
         elif isinstance(error, (_NotGuildOwner, _NotGuildOwnerNorStaff)):
@@ -1678,7 +1680,7 @@ class Music(commands.Cog):
             )
         elif isinstance(error, _DifferentVoiceChannels):
             embed = Embed(
-                title="You not in my voice channel",
+                title="You aren't in my voice channel",
                 color=Color.yellow(),
             )
             embed.description = f"Come to <#{error.voice_channel_id}>"
@@ -1700,4 +1702,7 @@ class Music(commands.Cog):
                 title="Something bad has happened and I dunno why...",
                 color=Color.red(),
             )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        try:
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except HTTPException:
+            pass
