@@ -402,7 +402,7 @@ async def _set_filter_preset(player: IceBeatPlayer, filter: Filter) -> None:
 
 
 def _ensure_player_is_ready(
-    bypass_presence_check: bool = False,
+    bypass_channel_presence_check: bool = False,
 ) -> Callable[[app_commands.checks.T], app_commands.checks.T]:
     async def predicate(interaction: Interaction) -> bool:
         bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
@@ -413,7 +413,7 @@ def _ensure_player_is_ready(
         except Exception as e:
             raise _FailedToRetrievePlayer(e)
 
-        if bypass_presence_check:
+        if bypass_channel_presence_check:
             return True
 
         bot_voice_client = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess]
@@ -1291,7 +1291,7 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
-    @_ensure_player_is_ready(bypass_presence_check=True)
+    @_ensure_player_is_ready(bypass_channel_presence_check=True)
     async def queue(self, interaction: Interaction) -> None:
         pagination = InteractionPagination(
             _QUEUE_PAGINATION_TIMEOUT,
@@ -1305,7 +1305,7 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
-    @_ensure_player_is_ready(bypass_presence_check=True)
+    @_ensure_player_is_ready(bypass_channel_presence_check=True)
     async def clear(self, interaction: Interaction) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -1350,7 +1350,7 @@ class Music(commands.Cog):
     @_cooldown()
     @_staff_only()
     @_is_guild_owner_or_staff()
-    @_ensure_player_is_ready(bypass_presence_check=True)
+    @_ensure_player_is_ready(bypass_channel_presence_check=True)
     async def shuffle(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
@@ -1372,7 +1372,7 @@ class Music(commands.Cog):
     @_cooldown()
     @_staff_only()
     @_is_guild_owner_or_staff()
-    @_ensure_player_is_ready(bypass_presence_check=True)
+    @_ensure_player_is_ready(bypass_channel_presence_check=True)
     async def loop(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
@@ -1395,7 +1395,7 @@ class Music(commands.Cog):
     @_cooldown()
     @_staff_only()
     @_is_guild_owner_or_staff()
-    @_ensure_player_is_ready(bypass_presence_check=True)
+    @_ensure_player_is_ready(bypass_channel_presence_check=True)
     async def volume(
         self, interaction: Interaction, level: app_commands.Range[int, 0, 100]
     ) -> None:
@@ -1417,7 +1417,7 @@ class Music(commands.Cog):
     @_cooldown()
     @_staff_only()
     @_is_guild_owner_or_staff()
-    @_ensure_player_is_ready(bypass_presence_check=True)
+    @_ensure_player_is_ready(bypass_channel_presence_check=True)
     async def filter(
         self,
         interaction: Interaction,
