@@ -7,11 +7,14 @@ from typing_extensions import override
 
 from discord import (
     Client,
+    ClientException,
     Color,
     Embed,
     Guild,
+    HTTPException,
     Interaction,
     Member,
+    NotFound,
     Permissions,
     Role,
     VoiceChannel,
@@ -1220,18 +1223,19 @@ class Music(commands.Cog):
     @_is_playing()
     @_ensure_player_is_ready()
     async def current(self, interaction: Interaction) -> None:
-        def build_message() -> Embed:
-            player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+
+        def build_message(player: IceBeatPlayer) -> Embed:
             voice_client: _LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
             current_track: lavalink.AudioTrack = player.current  # pyright: ignore[reportAssignmentType]
             position = player.position
             current_time = _milli_to_human_readable(position)
-            adjusted_bar = ["─"] * _PLAYER_BAR_SIZE
-            adjusted_bar[
-                int((position * _PLAYER_BAR_SIZE) / current_track.duration)
-            ] = ":white_circle:"
+            timeline = ["─"] * _PLAYER_BAR_SIZE
+            timeline[int((position * _PLAYER_BAR_SIZE) / current_track.duration)] = (
+                ":white_circle:"
+            )
             max_time = _milli_to_human_readable(current_track.duration)
-            player_bar = f"`{current_time}` ┃{''.join(adjusted_bar)}┃ `{max_time}`"
+            player_bar = f"`{current_time}` ┃{''.join(timeline)}┃ `{max_time}`"
             track_link = _format_hyperlink(current_track.title, current_track.uri)
             embed = Embed(
                 title=f"Playing at <#{voice_client.channel.id}>"
@@ -1269,15 +1273,17 @@ class Music(commands.Cog):
                         )
                         if msg_timeout in done or not player.is_playing:
                             break
-                        await response.edit(embed=build_message())
+                        await response.edit(embed=build_message(player))
                 await response.delete()
-            except Exception:
+            except (asyncio.CancelledError, HTTPException, ClientException, NotFound):
                 pass
             finally:
                 if waiter:
                     waiter.done()
 
-        await interaction.response.send_message(embed=build_message(), ephemeral=True)
+        await interaction.response.send_message(
+            embed=build_message(player), ephemeral=True
+        )
         asyncio.create_task(dispatch_message_edit())
 
     @app_commands.command(description="Lists queued tracks")
