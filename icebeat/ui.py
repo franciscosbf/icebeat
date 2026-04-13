@@ -109,14 +109,21 @@ class _BasePagination(ABC, View):
                         await self._edit_message(
                             embed=embed, view=None if empty else self
                         )
-            except (asyncio.CancelledError, HTTPException):
+            except HTTPException:
+                self.stop()
+            except Exception:
                 pass
-            except Exception as e:
-                __log__.warning("Dynamic page edition raised an error: %s", e)
             finally:
                 self._page.cancel_edit_request()
 
         self._dynamic_edit_page_task = asyncio.create_task(dynamic_edit_page())
+
+    async def _try_send_unavailable_page_alert(self) -> None:
+        embed = self._page.unavailable_page_alert()
+        try:
+            await self._edit_message(embed=embed, view=None)
+        except HTTPException:
+            pass
 
     @button(label="Previous", style=ButtonStyle.gray)  # pyright: ignore[reportArgumentType]
     async def previous(self, interaction: Interaction, button: Button) -> None:
@@ -138,7 +145,7 @@ class _BasePagination(ABC, View):
     async def on_error(
         self, interaction: Interaction, error: Exception, item: Item, /
     ) -> None:
-        _ = item
+        _, _ = interaction, item
 
         self._cancel_edit_page_task()
 
@@ -149,21 +156,13 @@ class _BasePagination(ABC, View):
 
         __log__.warning(f"Paginated view has failed: {error}")
 
-        embed = self._page.unavailable_page_alert()
-        try:
-            await interaction.response.edit_message(embed=embed, view=None)
-        except HTTPException:
-            pass
+        await self._try_send_unavailable_page_alert()
 
     @override
     async def on_timeout(self) -> None:
         self._cancel_edit_page_task()
 
-        embed = self._page.unavailable_page_alert()
-        try:
-            await self._edit_message(embed=embed, view=None)
-        except HTTPException:
-            pass
+        await self._try_send_unavailable_page_alert()
 
     async def navigate(self):
         if self._navigated:
