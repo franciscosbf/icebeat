@@ -20,6 +20,7 @@ from discord import (
     VoiceChannel,
     VoiceProtocol,
     VoiceState,
+    Webhook,
     app_commands,
 )
 from discord.abc import Connectable, Snowflake
@@ -709,6 +710,20 @@ class Music(commands.Cog):
 
         await voice_client.disconnect(force=True)
 
+    async def _proceed_to_next_track(self, player: IceBeatPlayer) -> None:
+        if not await self._guild_still_exists(player.guild_id):
+            return
+
+        try:
+            await player.play()
+        except Exception as e:
+            __log__.warning(
+                "Encountered an error when trying to play next enqueued track: %s",
+                e,
+            )
+
+            await self._decide_bot_presence(player.guild_id)
+
     @override
     async def cog_unload(self) -> None:
         await self._lavalink_client.close()
@@ -721,6 +736,25 @@ class Music(commands.Cog):
     async def on_removed_app_commands(self, event: RemovedAppCommands) -> None:
         self._remove_cached_guild_staff_commands_info(event.guild)
 
+    async def _try_warn_about_failed_track(
+        self,
+        track: Union[lavalink.AudioTrack, lavalink.DeferredAudioTrack],
+    ) -> None:
+        followup: Optional[Webhook] = track.extra.get("followup")
+        if not followup:
+            return
+
+        track_link = _format_hyperlink(track.title, track.uri)
+        embed = Embed(
+            title="Sorry, I failed to play the track below",
+            description=f"**{track_link}**",
+            color=Color.yellow(),
+        )
+        try:
+            await followup.send(embed=embed, ephemeral=True)
+        except (HTTPException, NotFound):
+            pass
+
     @lavalink.listener(lavalink.TrackStartEvent)
     async def on_track_start(self, event: lavalink.TrackStartEvent) -> None:
         await self._guild_still_exists(event.player.guild_id)
@@ -728,42 +762,43 @@ class Music(commands.Cog):
     @lavalink.listener(lavalink.TrackStuckEvent)
     async def on_track_stuck(self, event: lavalink.TrackStuckEvent) -> None:
         __log__.warning(
-            "Track %s got stuck in guild %d player",
-            event.track.source_name,
+            "Track '%s' (%s) got stuck in server %d",
+            event.track.title,
+            event.track.uri,
             event.player.guild_id,
         )
+
+        await self._try_warn_about_failed_track(event.track)
+
+        await self._proceed_to_next_track(event.player)  # pyright: ignore[reportArgumentType]
 
     @lavalink.listener(lavalink.TrackExceptionEvent)
     async def on_track_exception(self, event: lavalink.TrackExceptionEvent) -> None:
         __log__.warning(
-            "Track %s raised playback error on guild %d: %s",
-            event.track.source_name,
+            "Track '%s' (%s) raised playback error in server %d: %s",
+            event.track.title,
+            event.track.uri,
             event.player.guild_id,
             event.cause,
         )
 
+        await self._try_warn_about_failed_track(event.track)
+
+        await self._proceed_to_next_track(event.player)  # pyright: ignore[reportArgumentType]
+
     @lavalink.listener(lavalink.TrackLoadFailedEvent)
     async def on_track_load_failed(self, event: lavalink.TrackLoadFailedEvent) -> None:
         __log__.warning(
-            "Player has failed to load track %s in guild %d: ",
-            event.track.source_name,
+            "Failed to load track '%s' (%s) in server %d: ",
+            event.track.title,
+            event.track.uri,
             event.player.guild_id,
             event.original or "track not playable",
         )
 
-        if not await self._guild_still_exists(event.player.guild_id):
-            return
+        await self._try_warn_about_failed_track(event.track)
 
-        player: IceBeatPlayer = event.player  # pyright: ignore[reportAssignmentType]
-        try:
-            await player.play()
-        except Exception as e:
-            __log__.warning(
-                "Encountered an error when trying to play next enqueued track: %s",
-                e,
-            )
-
-            await self._decide_bot_presence(event.player.guild_id)
+        await self._proceed_to_next_track(event.player)  # pyright: ignore[reportArgumentType]
 
     @lavalink.listener(lavalink.QueueEndEvent)
     async def on_queue_end(self, event: lavalink.QueueEndEvent) -> None:
@@ -859,10 +894,15 @@ class Music(commands.Cog):
                 await interaction.followup.send(embed=embed)
                 return
             case lavalink.LoadType.SEARCH:
+                searched_track: Optional[
+                    list[Union[lavalink.AudioTrack, lavalink.DeferredAudioTrack]]
+                ] = None
                 for i in range(min(len(result.tracks), _MAX_SEARCH_RESULTS)):
                     if result.tracks[i].title == query:
-                        tracks = [result.tracks[i]]
+                        searched_track = [result.tracks[i]]
                         break
+                if searched_track:
+                    tracks = searched_track
                 else:
                     tracks = result.tracks[:1]
             case lavalink.LoadType.TRACK:
@@ -890,7 +930,9 @@ class Music(commands.Cog):
         n_retrieved_tracks = len(tracks)
         n_enqueued_tracks = min(free_queue_slots, n_retrieved_tracks)
         for i in range(n_enqueued_tracks):
-            player.add(tracks[i], requester=interaction.user.id)
+            track = tracks[i]
+            track.extra["followup"] = interaction.followup
+            player.add(track, requester=interaction.user.id)
 
         if len(tracks) == 1 and result.load_type != lavalink.LoadType.PLAYLIST:
             track = tracks[0]
@@ -945,7 +987,7 @@ class Music(commands.Cog):
             )
         except Exception as e:
             __log__.warning(
-                "Failed to retrieve guild player while processing "
+                "Failed to retrieve server player while processing "
                 "autocomplete call for play command: %s",
                 e,
             )
@@ -1650,7 +1692,9 @@ class Music(commands.Cog):
             )
             embed.set_footer(text="You still have tomorrow")
         elif isinstance(error, _FailedToRetrievePlayer):
-            __log__.warning("Failed to retrieve guild player: %v", error.original_error)
+            __log__.warning(
+                "Failed to retrieve server player: %v", error.original_error
+            )
 
             embed = Embed(
                 title="Music player failed to start",
@@ -1658,7 +1702,7 @@ class Music(commands.Cog):
             )
             embed.set_footer(text="Sorry, but something went wrong...")
         elif isinstance(error, _FailedToPreparePlayer):
-            __log__.warning("Failed to prepare guild player: %v", error.original_error)
+            __log__.warning("Failed to prepare server player: %v", error.original_error)
 
             embed = Embed(
                 title="A problem occurred when preparing the player",
