@@ -1645,10 +1645,10 @@ class Music(commands.Cog):
             __log__.warning("Failed to retrieve guild player: %v", error.original_error)
 
             embed = Embed(
-                title="My assistant just disapeared...",
+                title="Music player failed to start",
                 color=Color.yellow(),
             )
-            embed.set_footer(text="He just doesn't respond to my orders!?")
+            embed.set_footer(text="Sorry, but something went wrong...")
         elif isinstance(error, _FailedToPreparePlayer):
             __log__.warning("Failed to prepare guild player: %v", error.original_error)
 
@@ -1672,7 +1672,7 @@ class Music(commands.Cog):
             )
         elif isinstance(error, _DifferentVoiceChannels):
             embed = Embed(
-                title="We aren't in the same voice channel",
+                title="You not in my voice channel",
                 color=Color.yellow(),
             )
             embed.description = f"Come to <#{error.voice_channel_id}>"
