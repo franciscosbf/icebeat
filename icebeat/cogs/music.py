@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import re
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 from attr import dataclass
 from typing_extensions import override
 
@@ -527,7 +527,14 @@ class _CommandInfo:
 
 
 class _QueuePage(Page):
-    __slots__ = ("_player_manager", "_player", "_queue_waiter")
+    __slots__ = (
+        "_player_manager",
+        "_player",
+        "_current_waiter",
+        "_current_waiter_task",
+        "_queue_waiter",
+        "_queue_waiter_task",
+    )
 
     def __init__(
         self,
@@ -536,7 +543,10 @@ class _QueuePage(Page):
     ) -> None:
         self._player_manager = bot.lavalink_client.player_manager
         self._player: IceBeatPlayer = self._player_manager.get(guild.id)  # pyright: ignore[reportAttributeAccessIssue]
+        self._current_waiter = self._player.current_waiter()
+        self._current_waiter_task: Optional[asyncio.Task[Any]] = None
         self._queue_waiter = self._player.queue.waiter()
+        self._queue_waiter_task: Optional[asyncio.Task[Any]] = None
 
     def _unavailable_page_alert(self) -> Embed:
         return Embed(
@@ -558,35 +568,59 @@ class _QueuePage(Page):
                 color=Color.green(),
             )
             return embed, 1, 1, True
+
+        embed = Embed(title="Queue", color=Color.green())
+
+        if current := self._player.current:
+            embed.add_field(
+                name="Current",
+                value=f"**{_format_hyperlink(current.title, current.uri)}**",
+            )
+
         queue_len = len(queue)
         total_pages = compute_total_pages(queue_len, _QUEUE_PAGE_SIZE)
         if current_page > total_pages:
             current_page = total_pages
-        offset = (current_page - 1) * _QUEUE_PAGE_SIZE
+        queue_page_start = (current_page - 1) * _QUEUE_PAGE_SIZE
+        queue_page_end = min(queue_page_start + _QUEUE_PAGE_SIZE, len(queue))
         queue_page = enumerate(
-            queue[offset : offset + _QUEUE_PAGE_SIZE], start=offset + 1
+            (queue[i] for i in range(queue_page_start, queue_page_end)),
+            start=queue_page_start + 1,
         )
-
-        embed = Embed(
-            title="Enqueued Tracks",
-            description="\n".join(
-                "**{}.** **{}** ┃ `{}`".format(
+        embed.add_field(
+            name="Upcoming",
+            value="\n".join(
+                "**{}.** **{}**".format(
                     pos,
                     _format_hyperlink(track.title, track.uri),
-                    _milli_to_human_readable(track.duration),
                 )
                 for pos, track in queue_page
             ),
-            color=Color.green(),
+            inline=False,
         )
+
         embed.set_footer(text=f"page {current_page}/{total_pages}")
+
         return embed, current_page, total_pages, False
 
     def unavailable_page_alert(self) -> Embed:
         return self._unavailable_page_alert()
 
     async def wait_for_edit_request(self) -> None:
-        await self._queue_waiter.wait()
+        if not self._current_waiter_task:
+            self._current_waiter_task = asyncio.create_task(self._current_waiter.wait())
+        if not self._queue_waiter_task:
+            self._queue_waiter_task = asyncio.create_task(self._queue_waiter.wait())
+
+        done, _ = await asyncio.wait(
+            (self._current_waiter_task, self._queue_waiter_task),
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        if self._current_waiter_task in done:
+            self._current_waiter_task = None
+        if self._queue_waiter_task in done:
+            self._queue_waiter_task = None
 
     def cancel_edit_request(self) -> None:
         self._queue_waiter.done()
@@ -1110,7 +1144,7 @@ class Music(commands.Cog):
                 await player.skip()
 
                 embed = Embed(
-                    title=f"Jumping to the {ordinal_position} track in queue",
+                    title=f"Jumping to the {ordinal_position} track",
                     description=f"**[{next_track.title}]({next_track.uri})**",
                     color=Color.green(),
                 )
