@@ -160,6 +160,7 @@ def _format_hyperlink(text: str, link: str) -> str:
 
     text = text.replace("[", "⌈")
     text = text.replace("]", "⌉")
+    text = text.replace("*", "∗")
 
     return f"[{text}]({link})"
 
@@ -893,19 +894,7 @@ class Music(commands.Cog):
                 )
                 await interaction.followup.send(embed=embed)
                 return
-            case lavalink.LoadType.SEARCH:
-                searched_track: Optional[
-                    list[Union[lavalink.AudioTrack, lavalink.DeferredAudioTrack]]
-                ] = None
-                for i in range(min(len(result.tracks), _MAX_SEARCH_RESULTS)):
-                    if result.tracks[i].title == query:
-                        searched_track = [result.tracks[i]]
-                        break
-                if searched_track:
-                    tracks = searched_track
-                else:
-                    tracks = result.tracks[:1]
-            case lavalink.LoadType.TRACK:
+            case lavalink.LoadType.SEARCH | lavalink.LoadType.TRACK:
                 tracks = result.tracks[:1]
             case lavalink.LoadType.PLAYLIST:
                 tracks = result.tracks
@@ -1012,7 +1001,7 @@ class Music(commands.Cog):
         tracks = result.tracks
         max_searches = min(len(tracks), _MAX_SEARCH_RESULTS)
         return [
-            app_commands.Choice(name=tracks[i].title, value=tracks[i].title)
+            app_commands.Choice(name=tracks[i].title, value=tracks[i].uri)
             for i in range(max_searches)
         ]
 
