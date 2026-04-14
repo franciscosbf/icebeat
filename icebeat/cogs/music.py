@@ -567,16 +567,13 @@ class _QueuePage(Page):
             queue[offset : offset + _QUEUE_PAGE_SIZE], start=offset + 1
         )
 
-        pos_padding = len(str(queue_len))
-        queue_entry_fmt = "`{{:>{}}}.` **{{}}** [{{}}]".format(pos_padding)
         embed = Embed(
             title="Enqueued Tracks",
             description="\n".join(
-                queue_entry_fmt.format(
+                "**{}.** **{}** ┃ `{}`".format(
                     pos,
                     _format_hyperlink(track.title, track.uri),
                     _milli_to_human_readable(track.duration),
-                    track.requester,
                 )
                 for pos, track in queue_page
             ),
@@ -1287,7 +1284,7 @@ class Music(commands.Cog):
         async def dispatch_message_edit() -> None:
             waiter: Optional[Waiter] = None
             try:
-                response = await interaction.original_response()
+                # response = await interaction.original_response()
                 msg_timeout = asyncio.create_task(
                     asyncio.sleep(_CURRENT_TRACK_MSG_TIMEOUT)
                 )
@@ -1304,8 +1301,10 @@ class Music(commands.Cog):
                         )
                         if msg_timeout in done or not player.is_playing:
                             break
-                        await response.edit(embed=build_message(player))
-                await response.delete()
+                        await interaction.edit_original_response(
+                            embed=build_message(player)
+                        )
+                await interaction.delete_original_response()
             except (asyncio.CancelledError, HTTPException, ClientException, NotFound):
                 pass
             finally:

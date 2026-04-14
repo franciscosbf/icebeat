@@ -8,7 +8,6 @@ from discord import (
     Embed,
     HTTPException,
     Interaction,
-    InteractionMessage,
 )
 from discord.ext import commands
 from discord.ui import Item, View, button
@@ -208,7 +207,7 @@ class ContextPagination(_BasePagination):
 
 
 class InteractionPagination(_BasePagination):
-    __slots__ = ("_interaction", "_response")
+    __slots__ = ("_interaction",)
 
     def __init__(
         self,
@@ -219,7 +218,6 @@ class InteractionPagination(_BasePagination):
         super().__init__(timeout, page)
 
         self._interaction = interaction
-        self._response: Optional[InteractionMessage] = None
 
     @override
     async def interaction_check(self, interaction: Interaction) -> bool:
@@ -238,7 +236,4 @@ class InteractionPagination(_BasePagination):
         )
 
     async def _edit_message(self, *, embed: Embed, view: Optional[View]) -> None:
-        if not self._response:
-            self._response = await self._interaction.original_response()
-
-        await self._response.edit(embed=embed, view=view)
+        await self._interaction.edit_original_response(embed=embed, view=view)
