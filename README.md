@@ -8,6 +8,7 @@ A music player Discord bot powered by [Lavalink](https://lavalink.dev/).
 2. [Configuration Description & Example](#configuration-description-%26-example)<br>
 3. [Installation](#installation)<br>
 4. [Command Line Arguments](#command-line-arguments)<br>
+5. [Manual Database Setup](#database-setup)<br>
 
 ## Commands
 
@@ -120,11 +121,13 @@ Command cooldown is applied per server. Therefore, calling different commands by
 
 ## Installation
 
-IceBeat requires [Python >= 3.10](https://www.python.org/downloads/release/python-3100/), [SQLite](https://sqlite.org/) and [Lavalink](https://lavalink.dev/). After Python have been installed, you can install the bot by executing the following from the project root directory:
+IceBeat requires [Python >= 3.10](https://www.python.org/downloads/release/python-3100/) and [Lavalink](https://lavalink.dev/). After Python have been installed, you can install the bot by executing the following from the project root directory:
 
 ```sh
 pip install -e .
 ```
+
+`db/icebeat.db` includes a preconfigured SQLite database with all required tables already set up.
 
 ## Command Line Arguments
 
@@ -135,3 +138,21 @@ pip install -e .
 -d, --debug          output debugging logs
 ```
 
+
+## Manual Database Setup
+
+Database migrations located in `db/migrations` are required to create the tables. The setup below uses [migrate](https://github.com/golang-migrate/migrate) to write tables to an empty file. In order to use migrate with the SQLite driver, you need to have a [Go](https://go.dev/) compiler installed.
+
+```sh
+# migrate installation
+go install -tags 'sqlite' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
+
+# Create database file
+touch icebeat.db
+
+# Create tables
+migrate -source file://db/migrations -database sqlite://icebeat.db up
+
+# Remove tables
+migrate -source file://db/migrations -database sqlite://icebeat.db down
+```
