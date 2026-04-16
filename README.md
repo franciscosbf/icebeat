@@ -8,7 +8,7 @@ A music player Discord bot powered by [Lavalink](https://lavalink.dev/).
 2. [Configuration Description & Example](#configuration-description-%26-example)<br>
 3. [Installation](#installation)<br>
 4. [Command Line Arguments](#command-line-arguments)<br>
-5. [Manual Database Setup](#database-setup)<br>
+5. [Manual Database Setup](#manual-database-setup)<br>
 
 ## Commands
 
