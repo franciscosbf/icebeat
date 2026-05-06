@@ -129,6 +129,18 @@ pip install -e .
 
 `db/icebeat.db` includes a preconfigured SQLite database with all required tables already set up.
 
+On Linux environments, the dependencies below are required:
+
+- [libffi](https://github.com/libffi/libffi)
+- [libnacl](https://github.com/saltstack/libnacl)
+- [python3-dev](https://packages.debian.org/python3-dev)
+
+For instance, on Debian-based distributions, you can install these dependencies by running:
+
+```sh
+sudo apt update && sudo apt install libffi-dev libnacl-dev python3-dev
+```
+
 ## Command Line Arguments
 
 ```text
