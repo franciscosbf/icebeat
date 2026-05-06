@@ -7,6 +7,7 @@ A music player Discord bot powered by [Lavalink](https://lavalink.dev/).
 1.2. [Server Related](#bot-owner)<br>
 2. [Configuration Description & Example](#configuration-description-%26-example)<br>
 3. [Installation](#installation)<br>
+4. [Start Bot](#start-bot)<br>
 4. [Command Line Arguments](#command-line-arguments)<br>
 5. [Manual Database Setup](#manual-database-setup)<br>
 
@@ -121,10 +122,10 @@ Command cooldown is applied per server. Therefore, calling different commands by
 
 ## Installation
 
-IceBeat requires [Python >= 3.10](https://www.python.org/downloads/release/python-3100/) and [Lavalink](https://lavalink.dev/). After Python have been installed, you can install the bot by executing the following from the project root directory:
+IceBeat requires [Python >= 3.14](https://www.python.org/downloads/release/python-3140/) and [Lavalink](https://lavalink.dev/). After Python have been installed, you can install bot dependencies by executing the following from the project root directory:
 
 ```sh
-pip install -e .
+pip install -r requirements.txt
 ```
 
 `db/icebeat.db` includes a preconfigured SQLite database with all required tables already set up.
@@ -139,6 +140,12 @@ For instance, on Debian-based distributions, you can install these dependencies 
 
 ```sh
 sudo apt update && sudo apt install libffi-dev libnacl-dev python3-dev
+```
+
+## Start Bot
+
+```sh
+python3 -m icebeat
 ```
 
 ## Command Line Arguments
