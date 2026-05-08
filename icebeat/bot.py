@@ -40,9 +40,7 @@ _PREFIX = "/"
 _DEFAULT_DESCRIPTION = "IceBeat, a sort of jukebox"
 _STATUS = Status.online
 _DEFAULT_ACTIVITY_NAME = "music"
-_INTENTS = Intents(
-    guilds=True, message_content=True, dm_messages=True, voice_states=True
-)
+_INTENTS = Intents(guilds=True, dm_messages=True, voice_states=True)
 
 __log__ = logging.getLogger(__name__)
 
