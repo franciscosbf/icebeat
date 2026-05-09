@@ -51,6 +51,7 @@ class IceBeat(commands.Bot):
         "store",
         "lavalink_client",
         "_tree_sync_events",
+        "_presence_changed",
     )
 
     def __init__(
@@ -79,6 +80,7 @@ class IceBeat(commands.Bot):
         self.lavalink_client: lavalink.Client
 
         self._tree_sync_events = TreeSyncEvents()
+        self._presence_changed = False
 
     async def _sync_guild_app_commands(self, guild: Snowflake) -> None:
         commands = await self.tree.sync(guild=guild)
@@ -140,11 +142,6 @@ class IceBeat(commands.Bot):
         )
         await self.application.edit(description=description)  # pyright: ignore[reportOptionalMemberAccess]
 
-        await self.change_presence(
-            status=self.status,
-            activity=self.activity,  # pyright: ignore[reportArgumentType]
-        )
-
         await self.add_cog(Owner(self))
 
         await self._verify_whitelisted_guilds()
@@ -159,6 +156,13 @@ class IceBeat(commands.Bot):
 
     async def on_ready(self) -> None:
         __log__.info("I'm ready to serve")
+
+        if not self._presence_changed:
+            self._presence_changed = True
+            await super().change_presence(
+                status=self.status,
+                activity=self.activity,  # pyright: ignore[reportArgumentType]
+            )
 
     async def on_resumed(self) -> None:
         __log__.info("Session was resumed")
