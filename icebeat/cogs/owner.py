@@ -154,7 +154,7 @@ class Owner(commands.Cog):
         description="Whitelists a server",
         extras=_command_extras(emoji=":flag_white:"),
     )
-    async def whitelist_add(self, ctx: commands.Context, server: Guild) -> None:
+    async def whitelist_add(self, ctx: commands.Context, *, server: Guild) -> None:
         inserted = await self._bot.store.add_to_whitelist(server.id)
         if inserted:
             await self._bot.add_app_commands_to_guild(server)
@@ -176,7 +176,7 @@ class Owner(commands.Cog):
         description="Removes a server from the whitelist",
         extras=_command_extras(emoji=":flag_black:"),
     )
-    async def whitelist_remove(self, ctx: commands.Context, server: Guild) -> None:  # pyright: ignore[reportArgumentType]
+    async def whitelist_remove(self, ctx: commands.Context, *, server: Guild) -> None:  # pyright: ignore[reportArgumentType]
         blacklisted = await self._bot.store.remove_from_whitelist(server.id)
 
         if blacklisted:
@@ -201,6 +201,7 @@ class Owner(commands.Cog):
     async def whitelist_sync(
         self,
         ctx: commands.Context,
+        *,
         server: Guild = None,  # pyright: ignore[reportArgumentType]
     ) -> None:
         whitelist = await self._bot.store.get_whitelist()
