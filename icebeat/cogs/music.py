@@ -22,6 +22,7 @@ from discord import (
     VoiceState,
     Webhook,
     app_commands,
+    errors,
 )
 from discord.abc import Connectable, Snowflake
 from discord.types.voice import (
@@ -1738,7 +1739,7 @@ class Music(commands.Cog):
     async def cog_app_command_error(
         self, interaction: Interaction, error: app_commands.AppCommandError
     ) -> None:
-        if isinstance(error, (HTTPException, NotFound)):
+        if isinstance(error, (HTTPException, NotFound, errors.NotFound)):
             return
         elif isinstance(error, _GuildNotWhitelisted):
             embed = Embed(
