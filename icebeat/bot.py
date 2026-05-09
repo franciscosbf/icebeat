@@ -64,9 +64,7 @@ class IceBeat(commands.Bot):
             intents=_INTENTS,
             status=_STATUS,
             activity=CustomActivity(
-                name=self.conf.bot.activity
-                if self.conf.bot.activity
-                else _DEFAULT_ACTIVITY_NAME,
+                name=conf.bot.activity if conf.bot.activity else _DEFAULT_ACTIVITY_NAME,
             ),
             member_cache_flags=MemberCacheFlags.from_intents(_INTENTS),
             allowed_mentions=AllowedMentions.none(),
