@@ -5,8 +5,6 @@ from discord.utils import MISSING
 from typing_extensions import override
 
 from discord import (
-    Activity,
-    ActivityType,
     AllowedMentions,
     CustomActivity,
     Guild,
@@ -64,11 +62,13 @@ class IceBeat(commands.Bot):
             command_prefix=_PREFIX,
             help_command=None,
             intents=_INTENTS,
-            member_cache_flags=MemberCacheFlags.from_intents(_INTENTS),
             status=_STATUS,
             activity=CustomActivity(
-                name=conf.bot.activity if conf.bot.activity else _DEFAULT_ACTIVITY_NAME,
+                name=self.conf.bot.activity
+                if self.conf.bot.activity
+                else _DEFAULT_ACTIVITY_NAME,
             ),
+            member_cache_flags=MemberCacheFlags.from_intents(_INTENTS),
             allowed_mentions=AllowedMentions.none(),
         )
 
@@ -141,6 +141,11 @@ class IceBeat(commands.Bot):
             else _DEFAULT_DESCRIPTION
         )
         await self.application.edit(description=description)  # pyright: ignore[reportOptionalMemberAccess]
+
+        await self.change_presence(
+            status=self.status,
+            activity=self.activity,  # pyright: ignore[reportArgumentType]
+        )
 
         await self.add_cog(Owner(self))
 
