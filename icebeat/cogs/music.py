@@ -1339,7 +1339,7 @@ class Music(commands.Cog):
     )
     @_cooldown()
     @_is_playing()
-    @_ensure_player_is_ready()
+    @_ensure_player_is_ready(bypass_channel_presence_check=True)
     async def current(self, interaction: Interaction) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -1425,7 +1425,7 @@ class Music(commands.Cog):
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()
-    @_ensure_player_is_ready(bypass_channel_presence_check=True)
+    @_ensure_player_is_ready()
     async def clear(self, interaction: Interaction) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -1470,7 +1470,7 @@ class Music(commands.Cog):
     @_cooldown()
     @_staff_only()
     @_is_guild_owner_or_staff()
-    @_ensure_player_is_ready(bypass_channel_presence_check=True)
+    @_ensure_player_is_ready()
     async def shuffle(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
@@ -1492,7 +1492,7 @@ class Music(commands.Cog):
     @_cooldown()
     @_staff_only()
     @_is_guild_owner_or_staff()
-    @_ensure_player_is_ready(bypass_channel_presence_check=True)
+    @_ensure_player_is_ready()
     async def loop(self, interaction: Interaction) -> None:
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
 
@@ -1515,7 +1515,7 @@ class Music(commands.Cog):
     @_cooldown()
     @_staff_only()
     @_is_guild_owner_or_staff()
-    @_ensure_player_is_ready(bypass_channel_presence_check=True)
+    @_ensure_player_is_ready()
     async def volume(
         self, interaction: Interaction, level: app_commands.Range[int, 0, 100]
     ) -> None:
@@ -1537,7 +1537,7 @@ class Music(commands.Cog):
     @_cooldown()
     @_staff_only()
     @_is_guild_owner_or_staff()
-    @_ensure_player_is_ready(bypass_channel_presence_check=True)
+    @_ensure_player_is_ready()
     async def filter(
         self,
         interaction: Interaction,
