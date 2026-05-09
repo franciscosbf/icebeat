@@ -387,6 +387,26 @@ class _VoiceChannelIsFull(app_commands.CheckFailure):
     pass
 
 
+class _BotMissingPermissionsInVoiceChannel(app_commands.BotMissingPermissions):
+    __slots__ = ("voice_channel_id",)
+
+    def __init__(self, missing_permissions: list[str], voice_channel_id: int) -> None:
+        super().__init__(missing_permissions)
+
+        self.voice_channel_id = voice_channel_id
+
+
+class _BotRoleMissingPermissionsInVoiceChannel(_BotMissingPermissionsInVoiceChannel):
+    __slots__ = ("role_id",)
+
+    def __init__(
+        self, missing_permissions: list[str], voice_channel_id: int, role_id: int
+    ) -> None:
+        super().__init__(missing_permissions, voice_channel_id)
+
+        self.role_id = role_id
+
+
 def _parse_loop_mode(loop: bool) -> int:
     return IceBeatPlayer.LOOP_QUEUE if loop else IceBeatPlayer.LOOP_NONE
 
@@ -401,6 +421,49 @@ async def _set_filter_preset(player: IceBeatPlayer, filter: Filter) -> None:
         await player.set_filters(*filter_preset)
     else:
         await player.set_filter(filter_preset)
+
+
+def _collect_missing_perms(existing_perms, **required_perms: bool):
+    return [
+        perm
+        for perm, value in required_perms.items()
+        if getattr(existing_perms, perm) != value
+    ]
+
+
+def _check_vc_perms_for_bot(channel: VoiceChannel, **required_perms: bool) -> None:
+    me: Member = channel.guild.me
+
+    channel_perms_for_me = channel.permissions_for(me)
+    missing_bot_perms = _collect_missing_perms(channel_perms_for_me, **required_perms)
+    if missing_bot_perms:
+        raise _BotMissingPermissionsInVoiceChannel(missing_bot_perms, channel.id)
+
+    for role in me.roles:
+        channel_perms_for_role = channel.permissions_for(role)
+        missing_bot_role_perms = _collect_missing_perms(channel_perms_for_role)
+        if missing_bot_role_perms:
+            raise _BotRoleMissingPermissionsInVoiceChannel(
+                missing_bot_role_perms, channel.id, role.id
+            )
+
+
+def _check_vc_user_limit(channel: VoiceChannel) -> None:
+    # channel.user_limit == 0 -> channel user limit is infinite
+    if channel.user_limit > 0:
+        if len(channel.members) >= channel.user_limit:
+            raise _VoiceChannelIsFull()
+
+
+async def _prepare_player(bot: "IceBeat", player: IceBeatPlayer, guild_id: int) -> None:
+    try:
+        guild_db = await bot.store.get_guild(guild_id)
+        await player.set_volume(guild_db.volume)
+        await _set_filter_preset(player, guild_db.filter)
+    except Exception as e:
+        raise _FailedToPreparePlayer(e)
+    player.set_shuffle(guild_db.shuffle)
+    player.set_loop(_parse_loop_mode(guild_db.loop))
 
 
 def _ensure_player_is_ready(
@@ -424,23 +487,15 @@ def _ensure_player_is_ready(
         if not member.voice or not member.voice.channel:
             raise _MemberNotInVoiceChannel()
 
-        member_voice_channel = member.voice.channel
+        member_voice_channel: VoiceChannel = member.voice.channel  # pyright: ignore[reportAssignmentType]
         if not bot_voice_client:
             if interaction.command.name != Music.play.name:  # pyright: ignore[reportOptionalMemberAccess]
                 raise _BotNotInVoiceChannel()
 
-            if member_voice_channel.user_limit > 0:
-                if len(member_voice_channel.members) >= member_voice_channel.user_limit:
-                    raise _VoiceChannelIsFull()
+            _check_vc_perms_for_bot(member_voice_channel, connect=True, speak=True)
+            _check_vc_user_limit(member_voice_channel)
 
-            try:
-                guild_db = await bot.store.get_guild(guild_id)
-                await player.set_volume(guild_db.volume)
-                await _set_filter_preset(player, guild_db.filter)
-            except Exception as e:
-                raise _FailedToPreparePlayer(e)
-            player.set_shuffle(guild_db.shuffle)
-            player.set_loop(_parse_loop_mode(guild_db.loop))
+            await _prepare_player(bot, player, guild_id)
 
             await member_voice_channel.connect(cls=_LavalinkVoiceClient, self_deaf=True)
 
@@ -1701,12 +1756,24 @@ class Music(commands.Cog):
                     f"{embed.description} and members of role <@&{error.staff_role_id}>"
                 )
         elif isinstance(error, app_commands.BotMissingPermissions):
-            fmted_perms = _prettify_missing_bot_permissions(error)
             embed = Embed(
-                title="I don't have all required permissions",
-                description=f"**Missing permissions:** {fmted_perms}",
+                title="Some permissions for me are missing",
                 color=Color.yellow(),
             )
+            fmted_perms = _prettify_missing_bot_permissions(error)
+            if isinstance(error, _BotMissingPermissionsInVoiceChannel):
+                description = (
+                    f"**I'm not allowed to** {fmted_perms} "
+                    f"**in** <#{error.voice_channel_id}>"
+                )
+            elif isinstance(error, _BotRoleMissingPermissionsInVoiceChannel):
+                description = (
+                    f"**Bot role <@&{error.role_id}> doesn't allow to** "
+                    f"{fmted_perms} **in** <#{error.voice_channel_id}>"
+                )
+            else:
+                description = f"**I can't** {fmted_perms}"
+            embed.description = description
         elif isinstance(error, app_commands.CommandOnCooldown):
             embed = Embed(
                 title="Take it easy, do not spam commands",
