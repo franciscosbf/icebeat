@@ -59,9 +59,6 @@ class IceBeat(commands.Bot):
         store: Store,
         conf: Config,
     ) -> None:
-        description = (
-            conf.bot.description if conf.bot.description else _DEFAULT_DESCRIPTION
-        )
         activity = Activity(
             name=conf.bot.activity if conf.bot.activity else _DEFAULT_ACTIVITY_NAME,
             type=ActivityType.listening,
@@ -69,7 +66,6 @@ class IceBeat(commands.Bot):
         super().__init__(
             command_prefix=_PREFIX,
             help_command=None,
-            description=description,
             intents=_INTENTS,
             member_cache_flags=MemberCacheFlags.from_intents(_INTENTS),
             status=_STATUS,
@@ -140,6 +136,13 @@ class IceBeat(commands.Bot):
 
     @override
     async def setup_hook(self) -> None:
+        description = (
+            self.conf.bot.description
+            if self.conf.bot.description
+            else _DEFAULT_DESCRIPTION
+        )
+        await self.application.edit(description=description)  # pyright: ignore[reportOptionalMemberAccess]
+
         await self.add_cog(Owner(self))
 
         await self._verify_whitelisted_guilds()
