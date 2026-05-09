@@ -8,6 +8,7 @@ from discord import (
     Activity,
     ActivityType,
     AllowedMentions,
+    CustomActivity,
     Guild,
     Intents,
     MemberCacheFlags,
@@ -39,7 +40,7 @@ __all__ = [
 _PREFIX = "/"
 _DEFAULT_DESCRIPTION = "IceBeat, a sort of jukebox"
 _STATUS = Status.online
-_DEFAULT_ACTIVITY_NAME = "music"
+_DEFAULT_ACTIVITY_NAME = "blasting the eardrums with music"
 _INTENTS = Intents(guilds=True, dm_messages=True, voice_states=True)
 
 __log__ = logging.getLogger(__name__)
@@ -59,17 +60,15 @@ class IceBeat(commands.Bot):
         store: Store,
         conf: Config,
     ) -> None:
-        activity = Activity(
-            name=conf.bot.activity if conf.bot.activity else _DEFAULT_ACTIVITY_NAME,
-            type=ActivityType.listening,
-        )
         super().__init__(
             command_prefix=_PREFIX,
             help_command=None,
             intents=_INTENTS,
             member_cache_flags=MemberCacheFlags.from_intents(_INTENTS),
             status=_STATUS,
-            activity=activity,
+            activity=CustomActivity(
+                name=conf.bot.activity if conf.bot.activity else _DEFAULT_ACTIVITY_NAME,
+            ),
             allowed_mentions=AllowedMentions.none(),
         )
 
