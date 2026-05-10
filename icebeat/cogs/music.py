@@ -4,6 +4,7 @@ import re
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 from attr import dataclass
 from typing_extensions import override
+import itertools
 
 from discord import (
     ClientException,
@@ -25,6 +26,7 @@ from discord import (
 from discord.abc import Snowflake
 from discord.ext import commands
 import lavalink
+import rapidfuzz
 
 from icebeat.notify import Waiter
 from icebeat.ui import InteractionPagination, Page, compute_total_pages
@@ -55,6 +57,7 @@ _SEEK_TIME_RE = re.compile(
 )
 _QUERY_SEARCH_FMT = "ytsearch:{}"
 _MAX_SEARCH_RESULTS = 8
+_MAX_POSITION_RESULTS = 6
 _DEFAULT_USER_PERMISSIONS = Permissions(
     connect=True,
     use_application_commands=True,
@@ -971,7 +974,7 @@ class Music(commands.Cog):
     async def query_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        if _URL_RE.match(current):
+        if not current or _URL_RE.match(current):
             return []
 
         guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
@@ -1183,20 +1186,36 @@ class Music(commands.Cog):
     async def position_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[int]]:
-        if not current.isdigit():
+        if not current:
             return []
 
         player: Optional[IceBeatPlayer] = self._get_player(interaction)
         if not player:
             return []
 
-        position = int(current)
-        if not 1 <= position <= len(player.queue):
-            return []
+        if current.isdigit():
+            position = int(current)
+            if not 1 <= position <= len(player.queue):
+                return []
 
-        track = player.queue[position - 1]
+            track = player.queue[position - 1]
 
-        return [app_commands.Choice(name=track.title, value=position)]
+            return [
+                app_commands.Choice(name=f"{position}. {track.title}", value=position)
+            ]
+
+        extracted = rapidfuzz.process.extract(
+            current,
+            player.queue.titles,
+            scorer=rapidfuzz.fuzz.WRatio,
+            limit=_MAX_POSITION_RESULTS,
+        )
+        polished = ((title, index + 1) for title, _, index in extracted)
+
+        return [
+            app_commands.Choice(name=f"{position}. {title}", value=position)
+            for title, position in polished
+        ]
 
     @app_commands.command(description="Seeks to a given position in the track")
     @app_commands.describe(

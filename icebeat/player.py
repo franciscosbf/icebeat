@@ -33,13 +33,15 @@ class QueueIsFull(IceBeatPlayerError):
 class Queue(list[lavalink.AudioTrack]):
     _MAX_SIZE: int = _DEFAULT_MAX_QUEUE_SIZE
 
-    __slots__ = ("_notifier", "_free_slots")
+    __slots__ = ("_notifier", "_free_slots", "titles")
 
     def __init__(self) -> None:
         super().__init__()
 
         self._notifier = Event()
         self._free_slots = self._MAX_SIZE
+
+        self.titles = []
 
     @classmethod
     def set_max_size(cls, max_size: int) -> None:
@@ -74,6 +76,7 @@ class Queue(list[lavalink.AudioTrack]):
             raise QueueIsFull()
 
         super().append(track)
+        self.titles.append(track.title)
 
         self._update_free_slots()
         self._notify()
@@ -81,6 +84,7 @@ class Queue(list[lavalink.AudioTrack]):
     @override
     def pop(self, index: SupportsIndex = -1, /) -> lavalink.AudioTrack:
         track = super().pop(index)
+        self.titles.pop(index)
 
         self._update_free_slots()
         self._notify()
@@ -93,6 +97,7 @@ class Queue(list[lavalink.AudioTrack]):
             raise QueueIsFull()
 
         super().insert(index, track)
+        self.titles.insert(index, track)
 
         self._update_free_slots()
         self._notify()
@@ -100,12 +105,14 @@ class Queue(list[lavalink.AudioTrack]):
     @override
     def clear(self) -> None:
         super().clear()
+        self.titles.clear()
 
         self._update_free_slots()
         self._notify()
 
     def shrink(self, start: int) -> None:
         self[:] = self[start:]
+        self.titles = self.titles[start:]
 
         self._update_free_slots()
         self._notify()
