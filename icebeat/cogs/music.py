@@ -4,7 +4,6 @@ import re
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 from attr import dataclass
 from typing_extensions import override
-import itertools
 
 from discord import (
     ClientException,
