@@ -7,6 +7,7 @@ A music player Discord bot powered by [Lavalink](https://lavalink.dev/).
 1.2. [Server Related](#bot-owner)<br>
 2. [Configuration Description & Example](#configuration-description-%26-example)<br>
 3. [Installation](#installation)<br>
+3.1. [OS/Architecture Requirements](#os%2Farchitecture-requirements)<br>
 4. [Start Bot](#start-bot)<br>
 5. [Command Line Arguments](#command-line-arguments)<br>
 6. [Manual Database Setup](#manual-database-setup)<br>
@@ -141,6 +142,15 @@ For instance, on Debian-based distributions, you can install these dependencies 
 ```sh
 sudo apt update && sudo apt install libffi-dev libnacl-dev python3-dev
 ```
+
+### OS/Architecture Requirements
+
+The [rapidfuzz](github.com/rapidfuzz/RapidFuzz) dependency (included in `requirements.txt`) slightly limits the operating systems and architectures supported by IceBeat:
+
+- x86_64 Linux distros
+- Windows
+- MacOS (10.9 and later)
+- Armv7l (Raspberry Pi)
 
 ## Start Bot
 
