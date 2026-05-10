@@ -6,7 +6,6 @@ from attr import dataclass
 from typing_extensions import override
 
 from discord import (
-    Client,
     ClientException,
     Color,
     Embed,
@@ -18,22 +17,18 @@ from discord import (
     Permissions,
     Role,
     VoiceChannel,
-    VoiceProtocol,
     VoiceState,
     Webhook,
     app_commands,
     errors,
 )
-from discord.abc import Connectable, Snowflake
-from discord.types.voice import (
-    GuildVoiceState as GuildVoiceStatePayload,
-    VoiceServerUpdate as VoiceServerUpdatePayload,
-)
+from discord.abc import Snowflake
 from discord.ext import commands
 import lavalink
 
 from icebeat.notify import Waiter
 from icebeat.ui import InteractionPagination, Page, compute_total_pages
+from icebeat.voice import LavalinkVoiceClient
 
 
 from ..model import Filter
@@ -278,81 +273,11 @@ def _prettify_missing_bot_permissions(error: app_commands.BotMissingPermissions)
     if nperms == 1:
         fmted_perms = perms[0]
     elif nperms == 2:
-        fmted_perms = f"{perms[0]} and {perms[1]}"
+        fmted_perms = f"{perms[0]} **and** {perms[1]}"
     else:
-        fmted_perms = f"{', '.join(perms[:-1])} and {perms[-1]}"
+        fmted_perms = f"{'**,** '.join(perms[:-1])} **and** {perms[-1]}"
 
     return fmted_perms
-
-
-class _LavalinkVoiceClient(VoiceProtocol):
-    __slots__ = ("_lavalink_client", "_destroyed", "_guild")
-
-    def __init__(self, client: Client, channel: Connectable) -> None:
-        super().__init__(client, channel)
-
-        self._lavalink_client: lavalink.Client = self.client.lavalink_client  # pyright: ignore[reportAttributeAccessIssue]
-        self._destroyed = False
-        self._guild = self.channel.guild
-
-    async def _destroy(self) -> None:
-        self.cleanup()
-
-        if self._destroyed:
-            return
-        self._destroyed = True
-
-        try:
-            await self._lavalink_client.player_manager.destroy(self._guild.id)
-        except lavalink.errors.ClientError:
-            pass
-
-    @override
-    async def on_voice_state_update(self, data: GuildVoiceStatePayload) -> None:
-        raw_channel_id = data["channel_id"]
-        if not raw_channel_id:
-            await self._destroy()
-
-            return
-
-        channel_id = int(raw_channel_id)
-        self.channel: VoiceChannel = self.client.get_channel(channel_id)  # pyright: ignore[reportAttributeAccessIssue, reportIncompatibleVariableOverride]
-
-        payload = {"t": "VOICE_STATE_UPDATE", "d": data}
-        await self._lavalink_client.voice_update_handler(payload)  # pyright: ignore[reportArgumentType]
-
-    @override
-    async def on_voice_server_update(self, data: VoiceServerUpdatePayload) -> None:
-        payload = {"t": "VOICE_SERVER_UPDATE", "d": data}
-        await self._lavalink_client.voice_update_handler(payload)  # pyright: ignore[reportArgumentType]
-
-    @override
-    async def connect(
-        self,
-        *,
-        timeout: float,
-        reconnect: bool,
-        self_deaf: bool = False,
-        self_mute: bool = False,
-    ) -> None:
-        _, _ = timeout, reconnect
-
-        self._lavalink_client.player_manager.create(guild_id=self._guild.id)
-        await self._guild.change_voice_state(
-            channel=self.channel, self_mute=self_mute, self_deaf=self_deaf
-        )
-
-    @override
-    async def disconnect(self, *, force: bool) -> None:
-        player = self._lavalink_client.player_manager.get(self._guild.id)
-
-        if not force and not player.is_connected:  # pyright: ignore[reportOptionalMemberAccess]
-            return
-
-        await self._guild.change_voice_state(channel=None)
-
-        player.channel_id = None  #  pyright: ignore[reportOptionalMemberAccess]
-        await self._destroy()
 
 
 class _FailedToRetrievePlayer(app_commands.CheckFailure):
@@ -498,7 +423,7 @@ def _ensure_player_is_ready(
 
             await _prepare_player(bot, player, guild_id)
 
-            await member_voice_channel.connect(cls=_LavalinkVoiceClient, self_deaf=True)
+            await member_voice_channel.connect(cls=LavalinkVoiceClient, self_deaf=True)
 
             return True
 
@@ -791,13 +716,6 @@ class Music(commands.Cog):
 
         return self._bot.lavalink_client.player_manager.get(guild_id)  # pyright: ignore[reportReturnType]
 
-    async def _disconnect_bot(
-        self, player: IceBeatPlayer, voice_client: _LavalinkVoiceClient
-    ) -> None:
-        await player.stop()
-
-        await voice_client.disconnect(force=True)
-
     async def _proceed_to_next_track(self, player: IceBeatPlayer) -> None:
         if not await self._guild_still_exists(player.guild_id):
             return
@@ -921,7 +839,7 @@ class Music(commands.Cog):
         if not player:
             return
 
-        voice_client: Optional[_LavalinkVoiceClient] = member.guild.voice_client  # pyright: ignore[reportAssignmentType]
+        voice_client: Optional[LavalinkVoiceClient] = member.guild.voice_client  # pyright: ignore[reportAssignmentType]
         if not voice_client:
             return
 
@@ -931,7 +849,7 @@ class Music(commands.Cog):
         ):
             voice_states = voice_client.channel.voice_states
             if len(voice_states) == 1 and self._bot.user.id in voice_states:  # pyright: ignore[reportOptionalMemberAccess]
-                await self._disconnect_bot(player, voice_client)
+                await voice_client.disconnect()
 
     @app_commands.command(description="Requests something to play")
     @app_commands.describe(
@@ -1344,7 +1262,7 @@ class Music(commands.Cog):
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
         def build_message(player: IceBeatPlayer) -> Embed:
-            voice_client: _LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
+            voice_client: LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
             current_track: lavalink.AudioTrack = player.current  # pyright: ignore[reportAssignmentType]
             position = player.position
             current_time = _milli_to_human_readable(position)
@@ -1452,10 +1370,8 @@ class Music(commands.Cog):
     @_cooldown()
     @_ensure_player_is_ready()
     async def leave(self, interaction: Interaction) -> None:
-        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
-
-        voice_client: _LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
-        await self._disconnect_bot(player, voice_client)
+        voice_client: LavalinkVoiceClient = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
+        await voice_client.disconnect(stop=True)
 
         embed = Embed(
             title=f"Disconnected from <#{voice_client.channel.id}>",
@@ -1693,7 +1609,7 @@ class Music(commands.Cog):
         shuffle_mode_state = "enabled" if guild_db.shuffle else "disabled"
         loop_mode_state = "enabled" if guild_db.loop else "disabled"
         bot_presence = "stay" if guild_db.auto_leave else "leave"
-        voice_client: Optional[_LavalinkVoiceClient] = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
+        voice_client: Optional[LavalinkVoiceClient] = interaction.guild.voice_client  # pyright: ignore[reportOptionalMemberAccess, reportAssignmentType]
         if voice_client:
             player = self._get_player(interaction)
             player_state = (

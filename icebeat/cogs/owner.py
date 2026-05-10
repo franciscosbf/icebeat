@@ -1,8 +1,10 @@
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from discord import Color, Embed, Guild
 from discord.ext import commands
+
+from icebeat.voice import LavalinkVoiceClient
 
 from ..ui import ContextPagination, Page, compute_total_pages
 
@@ -181,6 +183,10 @@ class Owner(commands.Cog):
 
         if blacklisted:
             await self._bot.remove_app_commands_from_guild(server)
+
+            voice_client: Optional[LavalinkVoiceClient] = server.voice_client  # pyright: ignore[reportAssignmentType]
+            if voice_client:
+                await voice_client.disconnect(stop=True)
 
             embed = Embed(
                 title=f'Server "{server.name}" was removed from the whitelist',
