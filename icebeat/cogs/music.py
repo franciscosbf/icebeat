@@ -1078,9 +1078,10 @@ class Music(commands.Cog):
 
         await player.skip()
 
+        track_link = _format_hyperlink(current_track.title, current_track.uri)
         embed = Embed(
             title="Skipped current track",
-            description=f"**I was playing [{current_track.title}]({current_track.uri})**",
+            description=f"**I was playing {track_link}**",
             color=Color.green(),
         )
         await interaction.response.send_message(embed=embed)
