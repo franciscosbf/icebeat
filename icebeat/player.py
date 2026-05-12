@@ -1,4 +1,6 @@
-from typing import Optional, SupportsIndex
+from typing import Any, Optional, SupportsIndex
+from functools import wraps
+
 from discord.utils import classproperty
 from typing_extensions import override
 import lavalink
@@ -28,6 +30,19 @@ class InvalidQueueSize(IceBeatPlayerError):
 class QueueIsFull(IceBeatPlayerError):
     def __init__(self) -> None:
         super().__init__("queue is full")
+
+
+def _post_processing_queue_change(method):
+    @wraps(method)
+    def decorator(self: Queue, *args: Any) -> Any:
+        ret = method(self, *args)
+
+        self._update_free_slots()
+        self._notify()
+
+        return ret
+
+    return decorator
 
 
 class Queue(list[lavalink.AudioTrack]):
@@ -71,51 +86,58 @@ class Queue(list[lavalink.AudioTrack]):
         return self._notifier.waiter()
 
     @override
+    @_post_processing_queue_change
     def append(self, track: lavalink.AudioTrack, /) -> None:
         if self.is_full():
             raise QueueIsFull()
 
         super().append(track)
+
         self.titles.append(track.title)
 
-        self._update_free_slots()
-        self._notify()
-
     @override
+    @_post_processing_queue_change
     def pop(self, index: SupportsIndex = -1, /) -> lavalink.AudioTrack:
         track = super().pop(index)
-        self.titles.pop(index)
 
-        self._update_free_slots()
-        self._notify()
+        self.titles.pop(index)
 
         return track
 
     @override
+    @_post_processing_queue_change
     def insert(self, index: SupportsIndex, track: lavalink.AudioTrack, /) -> None:
         if self.is_full():
             raise QueueIsFull()
 
         super().insert(index, track)
+
         self.titles.insert(index, track)
 
-        self._update_free_slots()
-        self._notify()
-
     @override
+    @_post_processing_queue_change
     def clear(self) -> None:
         super().clear()
+
         self.titles.clear()
 
-        self._update_free_slots()
-        self._notify()
-
+    @_post_processing_queue_change
     def shrink(self, start: int) -> None:
         self[:] = self[start:]
+
         self.titles = self.titles[start:]
 
-        self._update_free_slots()
-        self._notify()
+    @_post_processing_queue_change
+    def move(
+        self, from_index: SupportsIndex, to_index: SupportsIndex
+    ) -> lavalink.AudioTrack:
+        track = super().pop(from_index)
+        super().insert(to_index, track)
+
+        title = self.titles.pop(from_index)
+        self.titles.insert(to_index, title)
+
+        return track
 
 
 class IceBeatPlayer(lavalink.DefaultPlayer):

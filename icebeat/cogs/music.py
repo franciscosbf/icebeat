@@ -1086,8 +1086,117 @@ class Music(commands.Cog):
         )
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(description="Skips to a given queued track")
+    @app_commands.command(description="Removes enqueued track and starts playing it")
     @app_commands.describe(position="track position in queue")
+    @app_commands.rename(position="track")
+    @app_commands.guild_only()
+    @_default_user_permissions()
+    @_is_whitelisted()
+    @_bot_has_permissions(
+        connect=True,
+        speak=True,
+    )
+    @_cooldown()
+    @_ensure_player_is_ready()
+    async def peek(
+        self,
+        interaction: Interaction,
+        position: app_commands.Range[int, 1, None],
+    ) -> None:
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+
+        ephemeral = True
+        if not player.queue:
+            embed = Embed(
+                title="Queue is empty",
+                color=Color.green(),
+            )
+        else:
+            queue_size = len(player.queue)
+            ordinal_position = _to_ordinal(position)
+            if position <= queue_size:
+                next_track = player.queue.pop(position - 1)
+                await player.play(next_track)
+
+                embed = Embed(
+                    title=f"{ordinal_position} track was dequeued to play now",
+                    description=f"**[{next_track.title}]({next_track.uri})**",
+                    color=Color.green(),
+                )
+                ephemeral = False
+            else:
+                embed = Embed(
+                    title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
+                    f"so there isn't any track in the {ordinal_position} position",
+                    color=Color.green(),
+                )
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+
+    @app_commands.command(description="Changes track position in queue")
+    @app_commands.describe(
+        current_position="current track position in queue",
+        destination_position="queue position where the track should be moved.",
+    )
+    @app_commands.rename(current_position="from", destination_position="to")
+    @app_commands.guild_only()
+    @_default_user_permissions()
+    @_is_whitelisted()
+    @_bot_has_permissions(
+        connect=True,
+        speak=True,
+    )
+    @_cooldown()
+    @_ensure_player_is_ready()
+    async def move(
+        self,
+        interaction: Interaction,
+        current_position: app_commands.Range[int, 1, None],
+        destination_position: app_commands.Range[int, 1, None],
+    ) -> None:
+        player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+
+        ephemeral = True
+        if not player.queue:
+            embed = Embed(
+                title="Queue is empty",
+                color=Color.green(),
+            )
+        else:
+            queue_size = len(player.queue)
+            original_position = _to_ordinal(current_position)
+            actual_position = _to_ordinal(destination_position)
+            if current_position > queue_size:
+                embed = Embed(
+                    title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
+                    f"so there isn't any track in the {original_position} position",
+                    color=Color.green(),
+                )
+            elif destination_position > queue_size:
+                embed = Embed(
+                    title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
+                    f"and you wanted to move to the {destination_position} position",
+                    color=Color.green(),
+                )
+            elif current_position == destination_position:
+                embed = Embed(
+                    title="Why would you want to move the track to its current position?",
+                    color=Color.green(),
+                )
+            else:
+                next_track = player.queue.move(
+                    current_position - 1, destination_position - 1
+                )
+
+                embed = Embed(
+                    title=f"{original_position} track was moved to the {actual_position} position",
+                    description=f"**[{next_track.title}]({next_track.uri})**",
+                    color=Color.green(),
+                )
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+
+    @app_commands.command(description="Skips to a queued track")
+    @app_commands.describe(position="track position in queue")
+    @app_commands.rename(position="track")
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
@@ -1134,8 +1243,9 @@ class Music(commands.Cog):
                 )
         await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
-    @app_commands.command(description="Removes a track from queue given its position")
+    @app_commands.command(description="Removes track from queue")
     @app_commands.describe(position="track position in queue")
+    @app_commands.rename(position="track")
     @app_commands.guild_only()
     @_default_user_permissions()
     @_is_whitelisted()
@@ -1179,6 +1289,8 @@ class Music(commands.Cog):
                 )
         await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
+    @peek.autocomplete("position")
+    @move.autocomplete("current_position")
     @jump.autocomplete("position")
     @pop.autocomplete("position")
     @_is_whitelisted()
@@ -1465,8 +1577,8 @@ class Music(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(description="Sets player filter")
-    @app_commands.rename(filter="name")
     @app_commands.describe(filter="filter name")
+    @app_commands.rename(filter="name")
     @_default_user_permissions()
     @_is_whitelisted()
     @_cooldown()

@@ -39,12 +39,19 @@ There's a subset of commands that only the server owner and members of an assign
 - `/stop` Stops the player
 - `/resume` Resumes the player
 - `/skip` Skips the current track
-- `/jump` Skips to a given queued track
+- `/peek` Removes enqueued track and starts playing it
   - Arguments
-    - `position` track position in queue; autocompletion will display the track name after entering the position
-- `/pop` Removes a track from queue given its position
+    - `track` track position in queue; autocompletion will display the track name after entering the position or search name result
+- `/move` Changes track position in queue
   - Arguments
-    - `position` track position in queue; autocompletion will display the track name after entering the position
+    - `from` current track position in queue; autocompletion will display the track name after entering the position or search name result
+    - `to` queue position where the track should be moved.
+- `/jump` Skips to a queued track
+  - Arguments
+    - `position` track position in queue; autocompletion will display the track name after entering the position or search name result
+- `/pop` Removes track from queue
+  - Arguments
+    - `position` track position in queue; autocompletion will display the track name after entering the position or search name result
 - `/seek` Seeks to a given position in the track
   - Arguments
     - `position` track position like in the YouTube video player, for example _5:38_
