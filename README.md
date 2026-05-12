@@ -200,7 +200,7 @@ sudo apt update && sudo apt install libffi-dev libnacl-dev python3-dev
 
 ### OS/Architecture Requirements
 
-The [rapidfuzz](github.com/rapidfuzz/RapidFuzz) dependency (included in `requirements.txt`) slightly limits the operating systems and architectures supported by IceBeat:
+The [rapidfuzz](https://github.com/rapidfuzz/RapidFuzz) dependency (included in `requirements.txt`) slightly limits the operating systems and architectures supported by IceBeat:
 
 - x86_64 Linux distros
 - Windows
