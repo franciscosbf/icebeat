@@ -255,7 +255,7 @@ class _QueueIsEmpty(app_commands.CheckFailure):
 def _is_queue_empty() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
     async def predicate(interaction: Interaction) -> bool:
         bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
-        player: IceBeatPlayer = bot.lavalink_client.player_manager.get(  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = bot.lavalink_client.player_manager.create(  # pyright: ignore[reportCallIssue]
             interaction.guild_id  # pyright: ignore[reportArgumentType]
         )
 
