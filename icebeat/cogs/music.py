@@ -152,17 +152,6 @@ _FILTER_PRESETS = {
 }
 
 
-def _format_hyperlink(text: str, link: str) -> str:
-    if len(text) > _MAX_DISCORD_TEXT_LINK_SIZE:
-        text = f"{text[:_MAX_DISCORD_TEXT_LINK_SIZE]}…"
-
-    text = text.replace("[", "⌈")
-    text = text.replace("]", "⌉")
-    text = text.replace("*", "∗")
-
-    return f"[{text}]({link})"
-
-
 def _default_user_permissions() -> Callable[
     [app_commands.checks.T], app_commands.checks.T
 ]:
@@ -259,60 +248,29 @@ def _is_guild_owner_or_staff() -> Callable[
     return app_commands.check(predicate)
 
 
+class _QueueIsEmpty(app_commands.CheckFailure):
+    pass
+
+
+def _is_queue_empty() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
+    async def predicate(interaction: Interaction) -> bool:
+        bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
+        player: IceBeatPlayer = bot.lavalink_client.player_manager.get(  # pyright: ignore[reportAssignmentType]
+            interaction.guild_id  # pyright: ignore[reportArgumentType]
+        )
+
+        if not player.queue:
+            raise _QueueIsEmpty()
+
+        return True
+
+    return app_commands.check(predicate)
+
+
 def _bot_has_permissions(
     **perms: bool,
 ) -> Callable[[app_commands.checks.T], app_commands.checks.T]:
     return app_commands.checks.bot_has_permissions(**perms)
-
-
-def _prettify_missing_bot_permissions(error: app_commands.BotMissingPermissions) -> str:
-    perms = [
-        f"_{perm.replace('_', ' ').replace('guild', 'server')}_"
-        for perm in error.missing_permissions
-    ]
-    nperms = len(perms)
-
-    if nperms == 1:
-        fmted_perms = perms[0]
-    elif nperms == 2:
-        fmted_perms = f"{perms[0]} **and** {perms[1]}"
-    else:
-        fmted_perms = f"{'**,** '.join(perms[:-1])} **and** {perms[-1]}"
-
-    return fmted_perms
-
-
-class _FailedToRetrievePlayer(app_commands.CheckFailure):
-    __slots__ = ("original_error",)
-
-    def __init__(self, original_error: Exception) -> None:
-        self.original_error = original_error
-
-
-class _FailedToPreparePlayer(app_commands.CheckFailure):
-    __slots__ = ("original_error",)
-
-    def __init__(self, original_error: Exception) -> None:
-        self.original_error = original_error
-
-
-class _MemberNotInVoiceChannel(app_commands.CheckFailure):
-    pass
-
-
-class _BotNotInVoiceChannel(app_commands.CheckFailure):
-    pass
-
-
-class _DifferentVoiceChannels(app_commands.CheckFailure):
-    __slots__ = ("voice_channel_id",)
-
-    def __init__(self, voice_channel_id: int) -> None:
-        self.voice_channel_id = voice_channel_id
-
-
-class _VoiceChannelIsFull(app_commands.CheckFailure):
-    pass
 
 
 class _BotMissingPermissionsInVoiceChannel(app_commands.BotMissingPermissions):
@@ -333,22 +291,6 @@ class _BotRoleMissingPermissionsInVoiceChannel(_BotMissingPermissionsInVoiceChan
         super().__init__(missing_permissions, voice_channel_id)
 
         self.role_id = role_id
-
-
-def _parse_loop_mode(loop: bool) -> int:
-    return IceBeatPlayer.LOOP_QUEUE if loop else IceBeatPlayer.LOOP_NONE
-
-
-async def _set_filter_preset(player: IceBeatPlayer, filter: Filter) -> None:
-    if filter == Filter.normal:
-        await player.clear_filters()
-        return
-
-    filter_preset = _FILTER_PRESETS[filter]
-    if filter == Filter.vaporwave:
-        await player.set_filters(*filter_preset)
-    else:
-        await player.set_filter(filter_preset)
 
 
 def _collect_missing_perms(existing_perms, **required_perms: bool):
@@ -376,11 +318,38 @@ def _check_vc_perms_for_bot(channel: VoiceChannel, **required_perms: bool) -> No
             )
 
 
+class _VoiceChannelIsFull(app_commands.CheckFailure):
+    pass
+
+
 def _check_vc_user_limit(channel: VoiceChannel) -> None:
     # channel.user_limit == 0 -> channel user limit is infinite
     if channel.user_limit > 0:
         if len(channel.members) >= channel.user_limit:
             raise _VoiceChannelIsFull()
+
+
+class _FailedToPreparePlayer(app_commands.CheckFailure):
+    __slots__ = ("original_error",)
+
+    def __init__(self, original_error: Exception) -> None:
+        self.original_error = original_error
+
+
+def _parse_loop_mode(loop: bool) -> int:
+    return IceBeatPlayer.LOOP_QUEUE if loop else IceBeatPlayer.LOOP_NONE
+
+
+async def _set_filter_preset(player: IceBeatPlayer, filter: Filter) -> None:
+    if filter == Filter.normal:
+        await player.clear_filters()
+        return
+
+    filter_preset = _FILTER_PRESETS[filter]
+    if filter == Filter.vaporwave:
+        await player.set_filters(*filter_preset)
+    else:
+        await player.set_filter(filter_preset)
 
 
 async def _prepare_player(bot: "IceBeat", player: IceBeatPlayer, guild_id: int) -> None:
@@ -392,6 +361,28 @@ async def _prepare_player(bot: "IceBeat", player: IceBeatPlayer, guild_id: int) 
         raise _FailedToPreparePlayer(e)
     player.set_shuffle(guild_db.shuffle)
     player.set_loop(_parse_loop_mode(guild_db.loop))
+
+
+class _FailedToRetrievePlayer(app_commands.CheckFailure):
+    __slots__ = ("original_error",)
+
+    def __init__(self, original_error: Exception) -> None:
+        self.original_error = original_error
+
+
+class _MemberNotInVoiceChannel(app_commands.CheckFailure):
+    pass
+
+
+class _BotNotInVoiceChannel(app_commands.CheckFailure):
+    pass
+
+
+class _DifferentVoiceChannels(app_commands.CheckFailure):
+    __slots__ = ("voice_channel_id",)
+
+    def __init__(self, voice_channel_id: int) -> None:
+        self.voice_channel_id = voice_channel_id
 
 
 def _ensure_player_is_ready(
@@ -438,6 +429,53 @@ def _ensure_player_is_ready(
     return app_commands.check(predicate)
 
 
+class _NotPlaying(app_commands.CheckFailure):
+    pass
+
+
+def _is_playing() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
+    def predicate(interaction: Interaction) -> bool:
+        bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
+        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
+
+        player: IceBeatPlayer = bot.lavalink_client.player_manager.create(guild_id)  # pyright: ignore[reportAssignmentType]
+
+        if not player.is_playing:
+            raise _NotPlaying()
+
+        return True
+
+    return app_commands.check(predicate)
+
+
+def _prettify_missing_bot_permissions(error: app_commands.BotMissingPermissions) -> str:
+    perms = [
+        f"_{perm.replace('_', ' ').replace('guild', 'server')}_"
+        for perm in error.missing_permissions
+    ]
+    nperms = len(perms)
+
+    if nperms == 1:
+        fmted_perms = perms[0]
+    elif nperms == 2:
+        fmted_perms = f"{perms[0]} **and** {perms[1]}"
+    else:
+        fmted_perms = f"{'**,** '.join(perms[:-1])} **and** {perms[-1]}"
+
+    return fmted_perms
+
+
+def _format_hyperlink(text: str, link: str) -> str:
+    if len(text) > _MAX_DISCORD_TEXT_LINK_SIZE:
+        text = f"{text[:_MAX_DISCORD_TEXT_LINK_SIZE]}…"
+
+    text = text.replace("[", "⌈")
+    text = text.replace("]", "⌉")
+    text = text.replace("*", "∗")
+
+    return f"[{text}]({link})"
+
+
 def _milli_to_human_readable(duration: int) -> str:
     total_secs = int(duration / 1_000)
     total_mins = int(total_secs / 60)
@@ -474,25 +512,6 @@ class _SeekTimeTransformer(app_commands.Transformer):
         position += int(key_matches["secs"]) * 1_000
 
         return position, value
-
-
-class _NotPlaying(app_commands.CheckFailure):
-    pass
-
-
-def _is_playing() -> Callable[[app_commands.checks.T], app_commands.checks.T]:
-    def predicate(interaction: Interaction) -> bool:
-        bot: "IceBeat" = interaction.client  # pyright: ignore[reportAssignmentType]
-        guild_id: int = interaction.guild_id  # pyright: ignore[reportAssignmentType]
-
-        player: IceBeatPlayer = bot.lavalink_client.player_manager.create(guild_id)  # pyright: ignore[reportAssignmentType]
-
-        if not player.is_playing:
-            raise _NotPlaying()
-
-        return True
-
-    return app_commands.check(predicate)
 
 
 def _to_ordinal(value: int) -> str:
@@ -1098,38 +1117,32 @@ class Music(commands.Cog):
     )
     @_cooldown()
     @_ensure_player_is_ready()
+    @_is_queue_empty()
     async def peek(
         self,
         interaction: Interaction,
         position: app_commands.Range[int, 1, None],
     ) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        queue_size = len(player.queue)
+        ordinal_position = _to_ordinal(position)
+        if position <= queue_size:
+            next_track = player.queue.pop(position - 1)
+            await player.play(next_track)
 
-        ephemeral = True
-        if not player.queue:
             embed = Embed(
-                title="Queue is empty",
+                title=f"{ordinal_position} track was dequeued to play now",
+                description=f"**[{next_track.title}]({next_track.uri})**",
                 color=Color.green(),
             )
+            ephemeral = False
         else:
-            queue_size = len(player.queue)
-            ordinal_position = _to_ordinal(position)
-            if position <= queue_size:
-                next_track = player.queue.pop(position - 1)
-                await player.play(next_track)
-
-                embed = Embed(
-                    title=f"{ordinal_position} track was dequeued to play now",
-                    description=f"**[{next_track.title}]({next_track.uri})**",
-                    color=Color.green(),
-                )
-                ephemeral = False
-            else:
-                embed = Embed(
-                    title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
-                    f"so there isn't any track in the {ordinal_position} position",
-                    color=Color.green(),
-                )
+            embed = Embed(
+                title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
+                f"so there isn't any track in the {ordinal_position} position",
+                color=Color.green(),
+            )
+            ephemeral = True
         await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @app_commands.command(description="Changes track position in queue")
@@ -1147,6 +1160,7 @@ class Music(commands.Cog):
     )
     @_cooldown()
     @_ensure_player_is_ready()
+    @_is_queue_empty()
     async def move(
         self,
         interaction: Interaction,
@@ -1154,44 +1168,38 @@ class Music(commands.Cog):
         destination_position: app_commands.Range[int, 1, None],
     ) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
-
         ephemeral = True
-        if not player.queue:
+        queue_size = len(player.queue)
+        original_position = _to_ordinal(current_position)
+        actual_position = _to_ordinal(destination_position)
+        if current_position > queue_size:
             embed = Embed(
-                title="Queue is empty",
+                title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
+                f"so there isn't any track in the {original_position} position",
+                color=Color.green(),
+            )
+        elif destination_position > queue_size:
+            embed = Embed(
+                title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
+                f"and you wanted to move to the {destination_position} position",
+                color=Color.green(),
+            )
+        elif current_position == destination_position:
+            embed = Embed(
+                title="Why would you want to move the track to its current position?",
                 color=Color.green(),
             )
         else:
-            queue_size = len(player.queue)
-            original_position = _to_ordinal(current_position)
-            actual_position = _to_ordinal(destination_position)
-            if current_position > queue_size:
-                embed = Embed(
-                    title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
-                    f"so there isn't any track in the {original_position} position",
-                    color=Color.green(),
-                )
-            elif destination_position > queue_size:
-                embed = Embed(
-                    title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
-                    f"and you wanted to move to the {destination_position} position",
-                    color=Color.green(),
-                )
-            elif current_position == destination_position:
-                embed = Embed(
-                    title="Why would you want to move the track to its current position?",
-                    color=Color.green(),
-                )
-            else:
-                next_track = player.queue.move(
-                    current_position - 1, destination_position - 1
-                )
+            next_track = player.queue.move(
+                current_position - 1, destination_position - 1
+            )
 
-                embed = Embed(
-                    title=f"{original_position} track was moved to the {actual_position} position",
-                    description=f"**[{next_track.title}]({next_track.uri})**",
-                    color=Color.green(),
-                )
+            embed = Embed(
+                title=f"{original_position} track was moved to the {actual_position} position",
+                description=f"**[{next_track.title}]({next_track.uri})**",
+                color=Color.green(),
+            )
+            ephemeral = False
         await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @app_commands.command(description="Skips to a queued track")
@@ -1206,41 +1214,35 @@ class Music(commands.Cog):
     )
     @_cooldown()
     @_ensure_player_is_ready()
+    @_is_queue_empty()
     async def jump(
         self,
         interaction: Interaction,
         position: app_commands.Range[int, 1, None],
     ) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        queue_size = len(player.queue)
+        ordinal_position = _to_ordinal(position)
+        if position <= queue_size:
+            if position > 1:
+                player.queue.shrink(position - 1)
+            next_track = player.queue[0]
 
-        ephemeral = True
-        if not player.queue:
+            await player.skip()
+
             embed = Embed(
-                title="Queue is empty",
+                title=f"Jumping to the {ordinal_position} track",
+                description=f"**[{next_track.title}]({next_track.uri})**",
                 color=Color.green(),
             )
+            ephemeral = False
         else:
-            queue_size = len(player.queue)
-            ordinal_position = _to_ordinal(position)
-            if position <= queue_size:
-                if position > 1:
-                    player.queue.shrink(position - 1)
-                next_track = player.queue[0]
-
-                await player.skip()
-
-                embed = Embed(
-                    title=f"Jumping to the {ordinal_position} track",
-                    description=f"**[{next_track.title}]({next_track.uri})**",
-                    color=Color.green(),
-                )
-                ephemeral = False
-            else:
-                embed = Embed(
-                    title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
-                    f"and you tried to jump to the {ordinal_position} track",
-                    color=Color.green(),
-                )
+            embed = Embed(
+                title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
+                f"and you tried to jump to the {ordinal_position} track",
+                color=Color.green(),
+            )
+            ephemeral = True
         await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @app_commands.command(description="Removes track from queue")
@@ -1255,38 +1257,32 @@ class Music(commands.Cog):
     )
     @_cooldown()
     @_ensure_player_is_ready()
+    @_is_queue_empty()
     async def pop(
         self,
         interaction: Interaction,
         position: app_commands.Range[int, 1, None],
     ) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
+        queue_size = len(player.queue)
+        ordinal_position = _to_ordinal(position)
+        if position <= queue_size:
+            removed_track = player.queue[position - 1]
+            player.queue.pop(position - 1)
 
-        ephemeral = True
-        if not player.queue:
             embed = Embed(
-                title="Queue is empty",
+                title=f"Successfully removed {ordinal_position} track from queue",
+                description=f"**[{removed_track.title}]({removed_track.uri})**",
                 color=Color.green(),
             )
+            ephemeral = False
         else:
-            queue_size = len(player.queue)
-            ordinal_position = _to_ordinal(position)
-            if position <= queue_size:
-                removed_track = player.queue[position - 1]
-                player.queue.pop(position - 1)
-
-                embed = Embed(
-                    title=f"Successfully removed {ordinal_position} track from queue",
-                    description=f"**[{removed_track.title}]({removed_track.uri})**",
-                    color=Color.green(),
-                )
-                ephemeral = False
-            else:
-                embed = Embed(
-                    title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
-                    f"and you tried to remove the {ordinal_position} track",
-                    color=Color.green(),
-                )
+            embed = Embed(
+                title=f"Queue has {queue_size} track{'s' if queue_size > 1 else ''} "
+                f"and you tried to remove the {ordinal_position} track",
+                color=Color.green(),
+            )
+            ephemeral = True
         await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @peek.autocomplete("position")
@@ -1873,6 +1869,8 @@ class Music(commands.Cog):
             embed.set_footer(text="I mean, it's full... duh")
         elif isinstance(error, _NotPlaying):
             embed = Embed(title="There's no track in the player", color=Color.yellow())
+        elif isinstance(error, _QueueIsEmpty):
+            embed = Embed(title="Queue is empty", color=Color.yellow())
         else:
             __log__.warning(
                 f"Error on {interaction.command.name} command",  # pyright: ignore[reportOptionalMemberAccess]
