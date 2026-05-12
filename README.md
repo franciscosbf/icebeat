@@ -9,7 +9,7 @@ A music player Discord bot powered by [Lavalink](https://lavalink.dev/).
 3. [Running With Docker](#running-with-docker)<br>
 3.1. [Docker Compose Example](#docker-compose-example)<br>
 4. [Installing Locally](#installing-locally)<br>
-4.1. [OS/Architecture Requirements](#os%2Farchitecture-requirements)<br>
+4.1. [OS And Architecture Requirements](#os-and-architecture-requirements)<br>
 5. [Start Bot](#start-bot)<br>
 6. [Command Line Arguments](#command-line-arguments)<br>
 7. [Manual Database Setup](#manual-database-setup)<br>
@@ -198,7 +198,7 @@ For instance, on Debian-based distributions, you can install these dependencies 
 sudo apt update && sudo apt install libffi-dev libnacl-dev python3-dev
 ```
 
-### OS/Architecture Requirements
+### OS And Architecture Requirements
 
 The [rapidfuzz](https://github.com/rapidfuzz/RapidFuzz) dependency (included in `requirements.txt`) slightly limits the operating systems and architectures supported by IceBeat:
 
