@@ -6,11 +6,13 @@ A music player Discord bot powered by [Lavalink](https://lavalink.dev/).
 1.1. [Bot Owner](#bot-owner)<br>
 1.2. [Server Related](#bot-owner)<br>
 2. [Configuration Description & Example](#configuration-description-%26-example)<br>
-3. [Installation](#installation)<br>
-3.1. [OS/Architecture Requirements](#os%2Farchitecture-requirements)<br>
-4. [Start Bot](#start-bot)<br>
-5. [Command Line Arguments](#command-line-arguments)<br>
-6. [Manual Database Setup](#manual-database-setup)<br>
+3. [Running With Docker](#running-with-docker)<br>
+3.1. [Docker Compose Example](#docker-compose-example)<br>
+4. [Installing Locally](#installing-locally)<br>
+4.1. [OS/Architecture Requirements](#os%2Farchitecture-requirements)<br>
+5. [Start Bot](#start-bot)<br>
+6. [Command Line Arguments](#command-line-arguments)<br>
+7. [Manual Database Setup](#manual-database-setup)<br>
 
 ## Commands
 
@@ -128,7 +130,53 @@ cooldown_time = 10
 
 Command cooldown is applied per server. Therefore, calling different commands by multiple users in a short period of time may trigger cooldown.
 
-## Installation
+## Running With Docker
+
+Fetch the image by executing:
+
+```sh
+docker push franciscosbf/icebeat:latest
+```
+
+Don't forget to mount the required configuration and database volumes under the `/bot` path. See [Docker Compose Example](#docker-compose-example) below.
+
+### Docker Compose Example
+
+```yaml
+services:
+  icebeat:
+    image: franciscosbf/icebeat:latest
+    container_name: icebeat
+    restart: unless-stopped
+    volumes:
+      - ./config.ini:/bot/config.ini
+      - ./icebeat.db:/bot/icebeat.db
+# From now on, this is just meant to showcase how
+# you can configure Lavalink with Docker Compose.
+    networks:
+      - bot
+    depends_on:
+      - lavalink
+  lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:4-alpine
+    container_name: lavalink
+    restart: unless-stopped
+    environment:
+      - _JAVA_OPTIONS=-Xmx512M
+    volumes:
+      - ./application.yml:/opt/Lavalink/application.yml
+      - ./plugins/:/opt/Lavalink/plugins/
+    networks:
+      - bot
+networks:
+  bot:
+    name: bot
+
+```
+
+For more information on running Lavalink with Docker Compose, see the guide [here](https://lavalink.dev/getting-started/docker).
+
+## Installing Locally
 
 IceBeat requires [Python >= 3.14](https://www.python.org/downloads/release/python-3140/) and [Lavalink](https://lavalink.dev/). After Python have been installed, you can install bot dependencies by executing the following from the project root directory:
 
