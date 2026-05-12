@@ -1040,8 +1040,8 @@ class Music(commands.Cog):
         speak=True,
     )
     @_cooldown()
-    @_is_playing()
     @_ensure_player_is_ready()
+    @_is_playing()
     async def pause(self, interaction: Interaction) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -1064,8 +1064,8 @@ class Music(commands.Cog):
         speak=True,
     )
     @_cooldown()
-    @_is_playing()
     @_ensure_player_is_ready()
+    @_is_playing()
     async def resume(self, interaction: Interaction) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -1088,8 +1088,8 @@ class Music(commands.Cog):
         speak=True,
     )
     @_cooldown()
-    @_is_playing()
     @_ensure_player_is_ready()
+    @_is_playing()
     async def skip(self, interaction: Interaction) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
@@ -1298,7 +1298,7 @@ class Music(commands.Cog):
             return []
 
         player: Optional[IceBeatPlayer] = self._get_player(interaction)
-        if not player:
+        if not player or not player.queue:
             return []
 
         if current.isdigit():
@@ -1337,8 +1337,8 @@ class Music(commands.Cog):
         speak=True,
     )
     @_cooldown()
-    @_is_playing()
     @_ensure_player_is_ready()
+    @_is_playing()
     async def seek(
         self,
         interaction: Interaction,
@@ -1383,8 +1383,8 @@ class Music(commands.Cog):
         speak=True,
     )
     @_cooldown()
-    @_is_playing()
     @_ensure_player_is_ready(bypass_channel_presence_check=True)
+    @_is_playing()
     async def current(self, interaction: Interaction) -> None:
         player: IceBeatPlayer = self._get_player(interaction)  # pyright: ignore[reportAssignmentType]
 
