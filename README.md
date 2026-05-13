@@ -90,7 +90,7 @@ Configuration is written using the [INI file](https://en.wikipedia.org/wiki/INI_
 [bot]
 # Discord token
 token = token code
-# Bot description displyed in its profile
+# Bot description displayed in its profile
 description = anything you want
 # Bot activity displayed in its profile
 activity = anything you want
